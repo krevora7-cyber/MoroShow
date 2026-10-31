@@ -1,0 +1,1 @@
+Channel guide: now-playing card, search, alphabetical/favorites ordering, category/country selector, numbered channel rows with coloured icons and actual EPG progress when supplied. Horizontal category strip removed. beIN preset restricted to Sports. Existing source limitations remain.

@@ -1,0 +1,1 @@
+Reviewed supplied TOD HTML (saved page contains client-rendered hero placeholders) and screenshot reference. Home header now overlays the full-bleed hero transparently, filters moved below hero, inherited hero margins/padding reset, account settings icon directly visible in header and linked to existing profile settings. Existing profile dropdown retained.

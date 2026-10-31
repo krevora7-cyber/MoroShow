@@ -1,0 +1,23 @@
+import {useEffect,useState} from 'react';
+import {Search,X} from 'lucide-react';
+import {catalogJson} from '../player/catalogCache';
+import {useProfile} from '../context/ProfileContext';
+import {useCatalog} from '../context/CatalogContext';
+import {MediaTile} from './MediaTile';
+import {HeroBanner} from './HeroBanner';
+import type {CatalogItem} from '../types';
+type SourceType='movie'|'tv'|'animation'|'search'|'clips';
+export function SourceCatalog({type}:{type:SourceType}){const {activeProfile}=useProfile();const {searchQuery,activeTab}=useCatalog();return <SourcePage key={`${type}:${activeProfile?.id}:${activeProfile?.isKid}:${activeTab==='search'?searchQuery:''}`} type={type}/>;}
+function SourcePage({type}:{type:SourceType}){
+ const {activeProfile}=useProfile();const {searchQuery:rawQuery,activeTab,rememberSourceItems}=useCatalog();
+ const [localQuery,setLocalQuery]=useState(''),[category,setCategory]=useState('popular'),[storyLanguage,setStoryLanguage]=useState(()=>{try{return localStorage.getItem('moroshow-shorts-catalog')==='ar'?'ar':'en';}catch{return 'en';}});const query=activeTab==='search'?rawQuery:localQuery;
+ return <section className={'m-source'+(type==='clips'?' ms-shorts-catalog':'')} aria-label={type==='clips'?'Shorts':type==='animation'?'Anime':type}>
+ {type==='clips'&&activeTab!=='search'&&<><div className="ms-browse-tools"><form className="ms-search" onSubmit={e=>e.preventDefault()}><Search size={19}/><input aria-label="Search short dramas" placeholder="Search short dramas…" value={localQuery} onChange={e=>setLocalQuery(e.target.value)} dir="auto"/>{localQuery&&<button aria-label="Clear search" onClick={()=>setLocalQuery('')} type="button"><X size={17}/></button>}</form><label className="ms-language-compact"><span className="sr-only">Story language</span><select aria-label="Shorts catalogue language" value={storyLanguage} onChange={e=>{setStoryLanguage(e.target.value);try{localStorage.setItem('moroshow-shorts-catalog',e.target.value);}catch{}}}><option value="en">English</option><option value="ar">العربية</option></select></label></div><div className="m-filters ms-category-tabs">{[['popular','For you'],['new-releases','New'],['romance','Romance'],['revenge','Revenge']].map(([id,label])=><button key={id} className={category===id?'selected':''} onClick={()=>setCategory(id)}>{label}</button>)}</div></>}
+ <CatalogResults key={`${type}:${category}:${query}:${storyLanguage}`} storyLanguage={storyLanguage} type={type} category={category} query={query} remember={rememberSourceItems} profileId={activeProfile?.id} kid={!!activeProfile?.isKid}/>
+ </section>;
+}
+function CatalogResults({type,category,query,remember,profileId,kid,storyLanguage}:{storyLanguage:string;type:SourceType;category:string;query:string;remember:(items:CatalogItem[])=>void;profileId?:string;kid:boolean}){
+ const [items,setItems]=useState<CatalogItem[]>([]),[page,setPage]=useState(1),[loading,setLoading]=useState(true),[error,setError]=useState(''),[more,setMore]=useState(false),[note,setNote]=useState(''),[retry,setRetry]=useState(0);
+ useEffect(()=>{if(!profileId)return;let cancelled=false;setLoading(true);setError('');const timer=setTimeout(async()=>{try{const params=new URLSearchParams({profileId,type,page:String(page),q:query,category,lang:storyLanguage,kids:kid?'1':'0'});const d=await catalogJson(`/api/web-sources/${type==='clips'?'clips':'catalog'}?${params}`+(retry?`&retry=${retry}`:''),!kid);if(cancelled)return;remember(d.items);setItems(old=>[...new Map([...(page===1?[]:old),...d.items].map((i:CatalogItem)=>[i.id,i])).values()] as CatalogItem[]);setMore(d.hasMore);setNote(d.note||'');}catch(e:any){if(!cancelled)setError(e.message);}finally{if(!cancelled)setLoading(false);}},query?350:0);return()=>{cancelled=true;clearTimeout(timer);};},[page,retry,profileId]);
+ return <>{type==='clips'&&!query&&items.length>0&&<HeroBanner entries={items} clips/>}{type==='clips'&&!query&&items.length>0&&<h2 className="ms-catalog-heading" dir="auto">{category==='new-releases'?'New stories':'Discover stories'}</h2>}{note&&<p className="m-notice">{note}</p>}{error&&<div role="alert" className="m-notice"><p>{error}</p><button className="m-secondary" onClick={()=>setRetry(n=>n+1)}>Try again</button></div>}<div className="m-grid">{items.map(i=><MediaTile key={i.id} item={i}/>)}</div>{loading&&<div role="status" className="m-loading">{type==='clips'?'Loading stories…':'Loading titles…'}</div>}{!loading&&!error&&!note&&!items.length&&<p className="m-empty">{type==='clips'?'No results. Try another search.':'No titles found. Try another search.'}</p>}{!loading&&more&&!error&&<button className="m-load-more m-secondary" onClick={()=>setPage(p=>p+1)}>{type==='clips'?'Load more':'Load more'}</button>}</>;
+}

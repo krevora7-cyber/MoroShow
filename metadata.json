@@ -1,0 +1,6 @@
+{
+  "name": "NetShow - Secure IPTV & VOD Streaming Platform",
+  "description": "Secure, high-performance IPTV streaming platform featuring family profiles, PIN security, HMAC-signed playback tokens, SSRF protection, HLS/MPEG-TS multi-engine player, and Live TV guide.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

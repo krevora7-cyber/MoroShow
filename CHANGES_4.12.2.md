@@ -1,0 +1,1 @@
+Immersive TV layout inspired by supplied reference: full video stage, translucent controls, right-hand channel drawer, previous/next channel, volume slider, favorites and fullscreen. Mobile drawer overlays the video. Existing source availability limitations from 4.12.1 still apply. TypeScript and production build checked. No new live-channel availability claim.

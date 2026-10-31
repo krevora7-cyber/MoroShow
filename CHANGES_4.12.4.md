@@ -1,0 +1,1 @@
+Fix the inherited 430px guide height constraining the immersive TV drawer. Drawer fills its parent; fixed header/search/filters retain their space, and channel list expands and scrolls through the entire remaining height.

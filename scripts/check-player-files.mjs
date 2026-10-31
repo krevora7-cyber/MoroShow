@@ -1,0 +1,13 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const read = name => fs.readFileSync(name, 'utf8');
+assert.match(read('src/main.tsx'), /player-lab/);
+assert.match(read('src/components/PlayerLab.tsx'), /attachWebStream/);
+assert.match(read('src/player/webEngine.ts'), /Hls\.isSupported\(\)/);
+assert.match(read('src/native/nativePlayer.ts'), /NetShowNativePlayer/);
+assert.match(read('ios-support/NetShowNativePlayerPlugin.swift'), /AVPlayerViewController/);
+assert.match(read('ios-support/NetShowBridgeViewController.swift'), /registerPluginInstance/);
+assert.match(read('src/components/VideoPlayer.tsx'), /playNative/);
+assert.match(read('server.ts'), /capacitor:\/\/localhost/);
+assert.doesNotMatch(read('capacitor.config.ts'), /NETSHOW_APP_URL/);
+console.log('9/9 Player foundation file-contract checks passed (not media/runtime tests).');

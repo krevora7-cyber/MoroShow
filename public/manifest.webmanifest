@@ -1,0 +1,24 @@
+{
+  "id": "/",
+  "name": "MoroShow",
+  "short_name": "MoroShow",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#0b0b0b",
+  "icons": [
+    {
+      "src": "/moroshow-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/moroshow-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
