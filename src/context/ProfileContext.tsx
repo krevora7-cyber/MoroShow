@@ -18,6 +18,7 @@ interface ProfileContextType {
   history: WatchHistoryItem[];
   favorites: string[];
   isLoading: boolean;
+  connectionError: string | null;
   setIsWhoIsWatchingOpen: (open: boolean) => void;
   setIsPinModalOpen: (open: boolean) => void;
   selectProfile: (profile: Profile) => void;
@@ -45,20 +46,24 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [history, setHistory] = useState<WatchHistoryItem[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [connectionError,setConnectionError]=useState<string|null>(null);
 
   // Fetch profiles on initial load
   const refreshProfiles = async () => {
+    setConnectionError(null);
     try {
-      const res = await apiFetch('/api/profiles');
+      const res = await apiFetch('/api/profiles',{signal:AbortSignal.timeout(15000)});
+      if(!res.ok)throw new Error('Profile service unavailable');
       const data = await res.json();
       if (data.success && Array.isArray(data.profiles)) {
         setProfiles(data.profiles);
+        if(!data.profiles.length)throw new Error('No profiles returned');
 
         // Always select a family profile after launch, like Netflix.
         setIsWhoIsWatchingOpen(true);
       }
     } catch (e) {
-      console.error('Failed to fetch profiles', e);
+      setConnectionError('Could not connect to the MoroShow server. Keep the Mac and tunnel running, then retry.');
     } finally {
       setIsLoading(false);
     }
@@ -265,6 +270,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
         history,
         favorites,
         isLoading,
+        connectionError,
         setIsWhoIsWatchingOpen,
         setIsPinModalOpen,
         selectProfile,
