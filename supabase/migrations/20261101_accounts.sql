@@ -12,7 +12,10 @@ drop policy if exists "Read own MoroShow state" on public.moro_account_state;
 create policy "Read own MoroShow state" on public.moro_account_state for select to authenticated using ((select auth.uid()) = account_id);
 
 -- A transaction + revision check prevents concurrent devices overwriting each other.
-create or replace function public.moro_save_state(expected_revision bigint, new_state jsonb)
+create schema if not exists moro_private;
+revoke all on schema moro_private from public, anon;
+grant usage on schema moro_private to authenticated;
+create or replace function moro_private.moro_save_state(expected_revision bigint, new_state jsonb)
 returns bigint language plpgsql security definer set search_path = '' as $$
 declare uid uuid := auth.uid(); current_revision bigint;
 begin
@@ -31,6 +34,13 @@ begin
   update public.moro_account_state set state = new_state, revision = current_revision + 1, updated_at = now() where account_id = uid;
   return current_revision + 1;
 end;
+$$;
+revoke all on function moro_private.moro_save_state(bigint,jsonb) from public,anon;
+grant execute on function moro_private.moro_save_state(bigint,jsonb) to authenticated;
+
+create or replace function public.moro_save_state(expected_revision bigint, new_state jsonb)
+returns bigint language sql security invoker set search_path = '' as $$
+  select moro_private.moro_save_state(expected_revision, new_state);
 $$;
 revoke all on function public.moro_save_state(bigint,jsonb) from public,anon;
 grant execute on function public.moro_save_state(bigint,jsonb) to authenticated;
