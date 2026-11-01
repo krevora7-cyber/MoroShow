@@ -58,10 +58,10 @@ export function LiveTvGuide(){
  const displayChannels=[...channels].sort((a,b)=>sort==='za'?b.name.localeCompare(a.name):sort==='favorites'?Number(favorites.includes(b.id))-Number(favorites.includes(a.id)):a.name.localeCompare(b.name));
  const now=selected?.epg?.find(p=>Date.parse(p.start)<=Date.now()&&Date.parse(p.end)>Date.now());
  if(activeProfile?.isKid)return <section className="tv-empty">Live TV is unavailable in Kids profiles.</section>;
- return <section className={`tv-room tv-cinema ${drawer?'tv-drawer-open':''}`} aria-label="Live TV">
+ return <section className={`tv-room tv-cinema tv-smarters ${drawer?'tv-drawer-open':''}`} aria-label="Live TV">
   <div className="tv-frame" ref={frameRef} onPointerMove={showControls} onClick={showControls}>
    <video ref={videoRef} playsInline muted={muted} onPause={()=>setPaused(true)} onPlay={()=>{setPaused(false);showControls();}} aria-label={selected?.name||'Live TV player'}/>
-   {!selected&&<div className="tv-idle"><span className="tv-idle-symbol"><Radio size={30}/></span><h1>Your front-row seat.</h1><p>Choose a channel below to watch live.</p><span className="tv-idle-tag">LIVE TV · MOROSHOW</span></div>}
+   {!selected&&<div className="tv-idle"><span className="tv-idle-symbol"><Radio size={30}/></span><h1>Your front-row seat.</h1><p>Choose a channel to watch live.</p><span className="tv-idle-tag">LIVE TV · MOROSHOW</span></div>}
    {connecting&&selected&&<div className="tv-player-message" role="status"><LoaderCircle className="tv-spin" size={28}/><span>Connecting to live…</span></div>}
    {error&&<div className="tv-player-message tv-player-error" role="alert"><p>{error}</p><button onClick={()=>{autoRetries.current=0;failedSources.current=[];setRetry(n=>n+1);}}><RotateCw size={16}/> Retry channel</button></div>}
    {selected&&<div className={`tv-overlay ${controls||paused||error?'shown':''}`}>
