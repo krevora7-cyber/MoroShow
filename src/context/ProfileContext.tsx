@@ -226,13 +226,14 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
   const recordHistory = async (item: Partial<WatchHistoryItem> & { contentId: string; currentTime: number; duration: number }) => {
     if (!activeProfile) return;
     try {
-      await apiFetch(`/api/profiles/${activeProfile.id}/history`, {
+      const saved = await apiFetch(`/api/profiles/${activeProfile.id}/history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(item),
         keepalive:true
       });
-      // Update local state without waiting
+      if(!saved.ok)throw new Error('Watch progress could not be saved');
+      // Update local state only after a confirmed save
       setHistory(prev => {
         const filtered = prev.filter(h => h.contentId !== item.contentId);
         const progressPercent = item.duration > 0 ? Math.min(100, Math.round((item.currentTime / item.duration) * 100)) : 0;

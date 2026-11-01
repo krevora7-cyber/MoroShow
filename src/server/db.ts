@@ -6,6 +6,8 @@
 
 import { generateContentId } from '../utils/fnv1a64';
 import fs from 'node:fs';
+import {AsyncLocalStorage} from 'node:async_hooks';
+import {randomUUID} from 'node:crypto';
 import path from 'node:path';
 import { hashPin, generateSalt, verifyPinWithRateLimit } from '../utils/security';
 import { parseM3U, PlaylistItem } from '../utils/m3uParser';
@@ -159,7 +161,7 @@ const ENRICHED_METADATA: Record<string, { overview: string; backdropUrl: string;
   }
 };
 
-class NetShowDatabase {
+export class NetShowDatabase {
   private profiles: Profile[] = [];
   private history = new Map<string, WatchHistoryItem[]>();
   private favorites = new Map<string, Set<string>>();
@@ -224,7 +226,11 @@ class NetShowDatabase {
     }
   }
 
+  private cloud = false;
+  public changed = false;
+  public exportAccountState() { return {profiles:this.profiles,history:[...this.history].map(([id,records])=>[id,records.map(({streamUrl,...rest})=>({...rest,streamUrl:''}))]),favorites:[...this.favorites].map(([id,values])=>[id,[...values]])}; }
   private saveState(): void {
+    if(this.cloud){this.changed=true;return;}
     try {
       fs.mkdirSync(path.dirname(this.stateFile), { recursive: true });
       const payload = {
@@ -239,8 +245,12 @@ class NetShowDatabase {
   public hasCatalog(): boolean { return this.catalog.length > 0; }
   public contentCount(): number { return this.catalog.length; }
 
-  constructor() {
-    if (!this.loadStateFromFile()) this.initDefaultProfiles();
+  constructor(accountState?: {profiles:Profile[];history?:any[];favorites?:any[]}|null) {
+    if(accountState!==undefined){
+      this.cloud=true;
+      if(accountState?.profiles?.length){this.profiles=accountState.profiles;this.history=new Map(accountState.history||[]);this.favorites=new Map((accountState.favorites||[]).map(([id,values]:any)=>[id,new Set<string>(values)]));}
+      else{this.profiles=[{id:randomUUID(),name:'My Profile',avatar:'disney_01',isKid:false,hasPin:false,createdAt:Date.now()}];this.changed=true;}
+    }else if (!this.loadStateFromFile()) this.initDefaultProfiles();
     if (process.env.NETSHOW_DEMO_CATALOG === 'true') this.loadCatalog(DEFAULT_AUTHORIZED_M3U);
   }
 
@@ -491,4 +501,7 @@ class NetShowDatabase {
   }
 }
 
-export const db = new NetShowDatabase();
+const sharedDatabase = new NetShowDatabase();
+const accountScope = new AsyncLocalStorage<NetShowDatabase>();
+export const withAccountDatabase = <T>(database:NetShowDatabase,callback:()=>T):T => accountScope.run(database,callback);
+export const db = new Proxy(sharedDatabase,{get(_target,key){const target=accountScope.getStore()||sharedDatabase;const value=Reflect.get(target,key,target);return typeof value==='function'?value.bind(target):value;}});

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, {type Request, type Response} from 'express';
 import {createServer as createViteServer} from 'vite';
 import {db} from './src/server/db';
+import {registerAccountAuth} from './src/server/accountAuth';
 import {registerWebSources} from './src/server/webSources';
 import {registerGeilTv} from './src/server/geilTv';
 const app=express();
@@ -17,6 +18,7 @@ app.use((req,res,next)=>{
  next();
 });
 app.get('/api/version',(_req,res)=>res.json({name:'MoroShow',version:'4.12.0',movies:'TMDB',animation:'TMDB genre 16',tv:'GEIL'}));
+registerAccountAuth(app);
 registerGeilTv(app);
 registerWebSources(app);
 // Legacy TV and event endpoints remain disabled.

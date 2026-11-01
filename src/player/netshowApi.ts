@@ -1,3 +1,4 @@
+import {supabase} from '../auth/client';
 import {previewEnabled,previewFetch} from './frontendPreview';
 /** Keep one API origin across browser and installed iOS app.
  * In a browser the API is same-origin; a bundled native build MUST configure
@@ -35,6 +36,12 @@ export function resolveMediaUrl(value: string): string {
   return url.href;
 }
 
-export function apiFetch(path: string, init?: RequestInit): Promise<Response> {
-  return previewEnabled()?previewFetch(path,init):fetch(apiUrl(path), init);
+export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  const headers=new Headers(init?.headers);
+  if(supabase){const {data}=await supabase.auth.getSession();if(data.session)headers.set('Authorization',`Bearer ${data.session.access_token}`);}
+  if(previewEnabled()&&!supabase)return previewFetch(path,init);
+  const response=await fetch(apiUrl(path),{...init,headers});
+  // A revision conflict means the transaction made no changes; reload and retry once.
+  if(supabase&&response.status===409&&typeof init?.body==='string')return fetch(apiUrl(path),{...init,headers});
+  return response;
 }
