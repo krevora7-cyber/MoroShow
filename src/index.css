@@ -128,3 +128,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}.m
 }
 @media(min-width:641px) and (max-width:1050px){.m-tv-sidebar{width:205px;left:14px;top:14px;bottom:14px;padding:10px 8px;border-radius:23px}.m-app>main,.m-tod-home>main{padding-left:233px}.m-sidebar-user{gap:5px;padding:4px}.m-sidebar-user time{display:none}.m-sidebar-profile-grid button>span{width:72px;height:72px}.m-tv-sidebar nav button{min-height:44px;font-size:12px}.m-tod-home .m-hero h1{font-size:36px}.m-tod-home .m-hero-cinema .m-hero-copy{width:88%}.m-tod-home .m-hero-overview{display:none}}
 @media(prefers-reduced-motion:reduce){.m-app button:focus-visible,.m-app a:focus-visible{transition:none}}
+
+/* The sidebar expands over the stage, keeping the content still. */
+@media(min-width:641px){
+.m-app>main,.m-tod-home>main{padding-left:104px}
+.m-tv-sidebar{width:72px;padding-left:9px;padding-right:9px;overflow-x:hidden;transition:width .26s cubic-bezier(.2,.8,.2,1),background .26s,box-shadow .26s}
+.m-tv-sidebar.is-expanded{width:240px;background:linear-gradient(145deg,#514a4299,#181719ed);box-shadow:18px 0 70px #0007}
+.m-sidebar-user{gap:8px;padding-left:10px;flex-shrink:0}.m-sidebar-user>img{flex-shrink:0}.m-sidebar-user strong,.m-sidebar-user time,.m-tv-sidebar nav button>span:last-child,.m-sidebar-bottom button>span{opacity:0;visibility:hidden;white-space:nowrap;transition:opacity .14s}
+.m-tv-sidebar.is-expanded .m-sidebar-user strong,.m-tv-sidebar.is-expanded .m-sidebar-user time,.m-tv-sidebar.is-expanded nav button>span:last-child,.m-tv-sidebar.is-expanded .m-sidebar-bottom button>span{opacity:1;visibility:visible;transition-delay:.08s}
+.m-tv-sidebar nav button{flex-shrink:0;padding-left:12px;overflow:visible}.m-tv-sidebar nav button>span:last-child{flex-shrink:0}.m-sidebar-bottom{padding-left:8px;padding-right:0}.m-sidebar-bottom>button{white-space:nowrap;min-height:36px;gap:14px}.m-sidebar-bottom>button>svg,.m-sidebar-brand img{flex-shrink:0}.m-sidebar-brand{padding-left:2px!important}.m-sidebar-profiles{min-width:212px}
+}
+@media(min-width:641px) and (max-width:1050px){.m-app>main,.m-tod-home>main{padding-left:96px}.m-tv-sidebar{width:68px}.m-tv-sidebar.is-expanded{width:225px}.m-tv-sidebar nav button{padding-left:10px}}
+@media(prefers-reduced-motion:reduce){.m-tv-sidebar,.m-sidebar-user strong,.m-sidebar-user time,.m-tv-sidebar nav button>span:last-child,.m-sidebar-bottom button>span{transition:none!important}}
