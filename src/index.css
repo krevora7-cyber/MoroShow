@@ -140,3 +140,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}.m
 }
 @media(min-width:641px) and (max-width:1050px){.m-app>main,.m-tod-home>main{padding-left:96px}.m-tv-sidebar{width:68px}.m-tv-sidebar.is-expanded{width:225px}.m-tv-sidebar nav button{padding-left:10px}}
 @media(prefers-reduced-motion:reduce){.m-tv-sidebar,.m-sidebar-user strong,.m-sidebar-user time,.m-tv-sidebar nav button>span:last-child,.m-sidebar-bottom button>span{transition:none!important}}
+
+/* Protect the square TV mark when the sidebar labels are collapsed. */
+.m-tv-sidebar nav .m-moro-tv-icon{flex:0 0 29px;min-width:29px;box-sizing:border-box;overflow:hidden;border-radius:7px;gap:1px}.m-tv-sidebar nav .m-moro-tv-icon img{flex:0 0 11px;width:11px!important;height:17px!important;object-fit:contain}.m-tv-sidebar nav .m-moro-tv-icon b{flex:0 0 auto;font-size:12px;line-height:1;letter-spacing:-.8px}.m-sidebar-bottom>button:first-child{padding-left:10px}
+.m-embed-start{flex:1;min-height:240px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:18px;background:#000}.m-embed-start p{font-size:13px;color:#aaa;text-align:center;padding:0 20px}
