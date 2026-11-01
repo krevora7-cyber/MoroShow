@@ -1,19 +1,22 @@
 import {createContext,useContext,useEffect,useState,type ReactNode} from 'react';
 import type {Session} from '@supabase/supabase-js';
 import {supabase} from './client';
+import {useDialog} from '../components/useDialog';
 import {apiUrl} from '../player/netshowApi';
 const Context=createContext<Session|null>(null);
 export const useAccount=()=>useContext(Context);
 export function AuthGate({children}:{children:ReactNode}){
- const [session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(!!supabase),[recovery,setRecovery]=useState(false),[backendReady,setBackendReady]=useState(false),[backendError,setBackendError]=useState(''),[check,setCheck]=useState(0);
- useEffect(()=>{if(!supabase)return;let mounted=true;void supabase.auth.getSession().then(({data})=>{if(mounted){setSession(data.session);setLoading(false);}});const {data}=supabase.auth.onAuthStateChange((event,value)=>{setSession(value);setLoading(false);if(event==='PASSWORD_RECOVERY')setRecovery(true);if(event==='SIGNED_OUT')setRecovery(false);});return()=>{mounted=false;data.subscription.unsubscribe();};},[]);
+ const [showLogin,setShowLogin]=useState(false),[session,setSession]=useState<Session|null>(null),[loading,setLoading]=useState(!!supabase),[recovery,setRecovery]=useState(false),[backendReady,setBackendReady]=useState(false),[backendError,setBackendError]=useState(''),[check,setCheck]=useState(0);
+ useEffect(()=>{const open=()=>setShowLogin(true);window.addEventListener('moro-sign-in',open);return()=>window.removeEventListener('moro-sign-in',open);},[]);
+ useEffect(()=>{if(!supabase)return;let mounted=true;void supabase.auth.getSession().then(({data})=>{if(mounted){setSession(data.session);setLoading(false);}});const {data}=supabase.auth.onAuthStateChange((event,value)=>{setSession(value);setLoading(false);if(value)setShowLogin(false);if(event==='PASSWORD_RECOVERY')setRecovery(true);if(event==='SIGNED_OUT')setRecovery(false);});return()=>{mounted=false;data.subscription.unsubscribe();};},[]);
  useEffect(()=>{if(!supabase||!session)return;const controller=new AbortController();setBackendReady(false);setBackendError('');void fetch(apiUrl('/api/auth/config'),{signal:AbortSignal.any([controller.signal,AbortSignal.timeout(15000)])}).then(async r=>{if(!r.ok)throw Error('Cannot reach the account server.');const config=await r.json();if(!config.enabled)throw Error('Email accounts are not enabled on this backend yet. Configure Supabase on the server.');if(!controller.signal.aborted)setBackendReady(true);}).catch(e=>{if(!controller.signal.aborted)setBackendError(e.message||'Account server unavailable.');});return()=>controller.abort();},[session?.user.id,check]);
- if(!supabase)return <>{children}</>;
+ if(!supabase)return <>{children}{showLogin&&<div className="m-auth-overlay" role="dialog" aria-modal="true" aria-label="Account sign-in unavailable"><div className="m-auth-page"><section className="m-auth-card"><h1>Account sign-in is not configured yet</h1><p>You can continue browsing and watching. Saving to My Moro requires account setup.</p><button className="m-primary" onClick={()=>setShowLogin(false)}>Continue browsing</button></section></div></div>}</>;
  if(loading)return <div className="m-auth-page" role="status">Connecting to your account…</div>;
- if(!session||recovery)return <AuthForm recovery={recovery} onRecovered={()=>setRecovery(false)}/>;
- if(!backendReady)return <div className="m-auth-page"><section className="m-auth-card"><h1>Your account</h1><p role={backendError?'alert':'status'}>{backendError||'Checking your account server…'}</p>{backendError&&<button className="m-primary" onClick={()=>setCheck(n=>n+1)}>Retry connection</button>}<button className="m-secondary" onClick={()=>void supabase!.auth.signOut({scope:'local'})}>Sign out</button></section></div>;
- return <Context.Provider value={session}><div key={session.user.id}>{children}</div></Context.Provider>;
+ if(recovery)return <AuthForm recovery onRecovered={()=>setRecovery(false)}/>;
+ if(session&&!backendReady)return <div className="m-auth-page"><section className="m-auth-card"><h1>Your account</h1><p role={backendError?'alert':'status'}>{backendError||'Checking your account server…'}</p>{backendError&&<button className="m-primary" onClick={()=>setCheck(n=>n+1)}>Retry connection</button>}<button className="m-secondary" onClick={()=>void supabase!.auth.signOut({scope:'local'})}>Sign out</button></section></div>;
+ return <Context.Provider value={session}><div key={session?.user.id||'guest'}>{children}</div>{showLogin&&!session&&<SignInDialog onClose={()=>setShowLogin(false)}/>}</Context.Provider>;
 }
+function SignInDialog({onClose}:{onClose:()=>void}){const ref=useDialog(true,onClose);return <div ref={ref} className="m-auth-overlay" role="dialog" aria-modal="true" aria-label="Sign in to save to My Moro"><button className="m-auth-dismiss" onClick={onClose} aria-label="Continue browsing">✕</button><AuthForm recovery={false} onRecovered={()=>{}}/></div>;}
 function AuthForm({recovery,onRecovered}:{recovery:boolean;onRecovered:()=>void}){
  const [mode,setMode]=useState<'signin'|'signup'|'reset'>('signin'),[email,setEmail]=useState(''),[password,setPassword]=useState(''),[name,setName]=useState(''),[marketing,setMarketing]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
  const submit=async(e:React.FormEvent)=>{e.preventDefault();if(!supabase)return;setBusy(true);setError('');setMessage('');try{

@@ -36,7 +36,8 @@ Use the publishable key supplied by your own project; never put a secret/service
 key in a VITE variable. Restart the backend with the updated GitHub source and run
 `npm ci` to install the auth client dependency. Preserve your existing TMDB settings.
 `/api/auth/config` must return `{"enabled":true}`. An unauthenticated request to
-`/api/profiles` must return HTTP 401.
+`/api/profiles` returns only the non-persistent Guest profile. Guest catalog browsing
+and playback are allowed; guest writes to profiles, history and favorites return HTTP 401.
 
 ## 4. Vercel environment
 
@@ -70,3 +71,7 @@ in user metadata and defaults to false. The signup page explains account data us
 - Existing profile persistence/migration tests and TypeScript/production builds.
 - Live email delivery and the SQL migration require your project configuration and
   must be verified after activation; no test emails are sent automatically.
+
+## Guest browsing
+
+Visitors browse and watch without signing in. Saving a title or opening My Moro requests sign-in or signup. Guest favorites and cloud watch history are never persisted. Guest requests cannot read any account profile.

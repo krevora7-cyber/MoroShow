@@ -1,3 +1,6 @@
+import {useAccount} from '../auth/AuthGate';
+import {supabase} from '../auth/client';
+import {requestSignIn,isGuestProfile} from '../auth/guest';
 import { apiFetch } from '../player/netshowApi';
 /**
  * Profile Context & State Management
@@ -37,6 +40,7 @@ interface ProfileContextType {
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  const account=useAccount();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
   const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
@@ -55,12 +59,12 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
       const res = await apiFetch('/api/profiles',{signal:AbortSignal.timeout(15000)});
       if(!res.ok)throw new Error('Profile service unavailable');
       const data = await res.json();
+      if(supabase&&!account&&data.guest!==true)throw new Error('Guest browsing needs the updated backend.');
       if (data.success && Array.isArray(data.profiles)) {
         setProfiles(data.profiles);
         if(!data.profiles.length)throw new Error('No profiles returned');
 
-        // Always select a family profile after launch, like Netflix.
-        setIsWhoIsWatchingOpen(true);
+        if(data.guest===true&&data.profiles[0]?.id==='moro-guest'){setActiveProfile(data.profiles[0]);setIsWhoIsWatchingOpen(false);}else{setIsWhoIsWatchingOpen(true);}
       }
     } catch (e) {
       setConnectionError('Could not connect to the MoroShow server. Keep the Mac and tunnel running, then retry.');
@@ -207,6 +211,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const toggleFavorite = async (contentId: string) => {
     if (!activeProfile) return;
+    if(isGuestProfile(activeProfile.id)){requestSignIn();return;}
     const exists = favorites.includes(contentId);
     if (exists) {
       setFavorites(prev => prev.filter(id => id !== contentId));
@@ -224,7 +229,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
   const isFavorite = (contentId: string) => favorites.includes(contentId);
 
   const recordHistory = async (item: Partial<WatchHistoryItem> & { contentId: string; currentTime: number; duration: number }) => {
-    if (!activeProfile) return;
+    if (!activeProfile||isGuestProfile(activeProfile.id)) return;
     try {
       const saved = await apiFetch(`/api/profiles/${activeProfile.id}/history`, {
         method: 'POST',

@@ -11,7 +11,18 @@ export function registerAccountAuth(app:Express){
   // already require short-lived, unguessable playback capabilities.
   if(req.method==='GET'&&(/^\/live\/media\/[a-f0-9]+$/.test(req.path)||/^\/clips\/media\/[a-f0-9]+$/.test(req.path)||/^\/shorts\/key\/[a-f0-9]+$/.test(req.path)||/^\/shorts\/compatible\/[a-f0-9]{48}\/[\w.-]+$/.test(req.path)))return next();
   const token=req.headers.authorization?.match(/^Bearer ([^\s]+)$/)?.[1];
-  if(!token)return res.status(401).json({success:false,error:'Sign in required.'});
+  if(!token){
+   const guest={id:'moro-guest',name:'Guest',avatar:'disney_01',isKid:false,hasPin:false,createdAt:0};
+   if(req.method==='GET'&&req.path==='/profiles')return res.json({success:true,guest:true,profiles:[guest]});
+   const requested=req.path.match(/^\/profiles\/([^/]+)/)?.[1]||String(req.query.profileId||req.body?.profileId||'');
+   if(requested&&requested!==guest.id)return res.status(401).json({success:false,error:'Sign in to use this profile.'});
+   if(req.method==='GET'&&req.path===`/profiles/${guest.id}/history`)return res.json({success:true,history:[]});
+   if(req.method==='GET'&&req.path===`/profiles/${guest.id}/favorites`)return res.json({success:true,favorites:[]});
+   const publicRead=req.method==='GET'&&(/^\/web-sources\/(status|catalog|anime|clips|hero\/netflix|home\/[a-z-]+)$/.test(req.path)||/^\/media\/[^/]+\/artwork$/.test(req.path)||/^\/series\/[^/]+\/episodes$/.test(req.path)||req.path==='/live/channels'||req.path==='/shorts/subtitles');
+   const publicPlay=req.method==='POST'&&['/stream/token','/live/play'].includes(req.path);
+   if(publicRead||publicPlay)return withAccountDatabase(new NetShowDatabase({profiles:[guest],history:[],favorites:[]}),()=>next());
+   return res.status(401).json({success:false,error:'Sign in to save titles and manage your account.'});
+  }
   const headers={apikey:key,Authorization:`Bearer ${token}`};
   try{
    const auth=await fetch(`${url}/auth/v1/user`,{headers,signal:AbortSignal.timeout(10000)});

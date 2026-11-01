@@ -1,3 +1,4 @@
+import {isGuestProfile,requestSignIn} from '../auth/guest';
 import {catalogJson} from '../player/catalogCache';
 import { apiFetch } from '../player/netshowApi';
 /**
@@ -229,7 +230,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
         isSettingsOpen,
         isProfileEditOpen,
         editingProfileId,
-        setActiveTab,
+        setActiveTab:(tab)=>{if(tab==='favorites'&&isGuestProfile(activeProfile?.id)){requestSignIn();return;}setActiveTab(tab);},
         setSelectedCategory,
         setSearchQuery,
         setSelectedSeries,
