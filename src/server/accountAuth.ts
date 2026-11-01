@@ -18,7 +18,7 @@ export function registerAccountAuth(app:Express){
    if(requested&&requested!==guest.id)return res.status(401).json({success:false,error:'Sign in to use this profile.'});
    if(req.method==='GET'&&req.path===`/profiles/${guest.id}/history`)return res.json({success:true,history:[]});
    if(req.method==='GET'&&req.path===`/profiles/${guest.id}/favorites`)return res.json({success:true,favorites:[]});
-   const publicRead=req.method==='GET'&&(/^\/web-sources\/(status|catalog|anime|clips|hero\/netflix|home\/[a-z-]+)$/.test(req.path)||/^\/media\/[^/]+\/artwork$/.test(req.path)||/^\/series\/[^/]+\/episodes$/.test(req.path)||req.path==='/live/channels'||req.path==='/shorts/subtitles');
+   const publicRead=req.method==='GET'&&(/^\/web-sources\/(status|catalog|anime|clips|hero\/netflix|home\/(?:top10|[a-z-]+))$/.test(req.path)||/^\/media\/[^/]+\/artwork$/.test(req.path)||/^\/series\/[^/]+\/episodes$/.test(req.path)||req.path==='/live/channels'||req.path==='/shorts/subtitles');
    const publicPlay=req.method==='POST'&&['/stream/token','/live/play'].includes(req.path);
    if(publicRead||publicPlay)return withAccountDatabase(new NetShowDatabase({profiles:[guest],history:[],favorites:[]}),()=>next());
    return res.status(401).json({success:false,error:'Sign in to save titles and manage your account.'});

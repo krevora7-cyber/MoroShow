@@ -26,12 +26,14 @@ test('API validates sessions, enforces ownership, persists changes and reports r
  try{
   const app=express();app.use(express.json());registerAccountAuth(app);
   app.get('/api/profiles',(_req,res)=>res.json({profiles:db.getProfiles()}));
+  app.get('/api/web-sources/home/top10',(_req,res)=>res.json({profiles:db.getProfiles()}));
   app.get('/api/web-sources/catalog',(_req,res)=>res.json({profiles:db.getProfiles()}));
   app.get('/api/profiles/:id/favorites',(req,res)=>res.json({favorites:db.getFavorites(req.params.id)}));
   app.post('/api/profiles/:id/favorites',(req,res)=>{db.addFavorite(req.params.id,'w32:movie:1');res.json({success:true});});
   server=app.listen(0,'127.0.0.1');await new Promise<void>(r=>server.once('listening',r));const base=`http://127.0.0.1:${server.address().port}`;
   const request=(path:string,token?:string,method='GET')=>oldFetch(base+path,{method,headers:token?{Authorization:'Bearer '+token}:{}});
   const guest=await (await request('/api/profiles')).json();assert.equal(guest.guest,true);assert.equal(rows.size,0);const publicCatalog=await (await request('/api/web-sources/catalog?profileId=moro-guest')).json();assert.equal(publicCatalog.profiles[0].id,'moro-guest');assert.equal((await request('/api/web-sources/catalog?profileId=private-profile')).status,401);assert.equal((await request('/api/profiles/moro-guest/favorites',undefined,'POST')).status,401);assert.equal((await request('/api/profiles','fake')).status,401);
+  assert.equal((await request('/api/web-sources/home/top10?profileId=moro-guest')).status,200);assert.equal((await request('/api/web-sources/home/top10?profileId=private-profile')).status,401);assert.equal(rows.size,0);
   const pa=await (await request('/api/profiles','token-a')).json(),pb=await (await request('/api/profiles','token-b')).json();const id1=pa.profiles[0].id,id2=pb.profiles[0].id;assert.notEqual(id1,id2);assert.equal(rows.size,2);
   assert.equal((await request(`/api/profiles/${id1}/favorites`,'token-b')).status,404);
   assert.equal((await request(`/api/profiles/${id1}/favorites`,'token-a','POST')).status,200);assert.deepEqual(rows.get(a).state.favorites,[[id1,['w32:movie:1']]]);assert.deepEqual(rows.get(b).state.favorites,[]);
