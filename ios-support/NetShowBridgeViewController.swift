@@ -6,5 +6,6 @@ class NetShowBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(NetShowNativePlayerPlugin())
+        bridge?.registerPluginInstance(MoroProtectedPlayerPlugin())
     }
 }

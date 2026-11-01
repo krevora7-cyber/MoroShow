@@ -1,0 +1,11 @@
+{
+  "appId": "com.netshow.app",
+  "appName": "MoroShow",
+  "webDir": "native-dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "ios": {
+    "contentInset": "never"
+  }
+}

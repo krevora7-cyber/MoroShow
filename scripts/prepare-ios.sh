@@ -14,7 +14,7 @@ if [[ -z "${VITE_NETSHOW_API_BASE:-}" || "${VITE_NETSHOW_API_BASE}" != https://*
   echo 'This is the app API origin, NOT a provider account URL.' >&2
   exit 1
 fi
-npm run build
+npm run build -- --outDir native-dist
 if [[ ! -d ios/App ]]; then npx cap add ios; fi
 npx cap sync ios
 # Install the selected MoroShow logo in the native asset catalog.
@@ -36,6 +36,7 @@ if splash.exists():
     for image in splash.glob('*.png'):
         shutil.copyfile('assets/splash.png', image)
 ICON_PY
+cp ios-support/MoroProtectedPlayerPlugin.swift ios/App/App/
 cp ios-support/NetShowNativePlayerPlugin.swift ios/App/App/
 cp ios-support/NetShowBridgeViewController.swift ios/App/App/
 # Capacitor 7/8 template: replace storyboard class with the app-local plugin host.
@@ -54,5 +55,5 @@ if 'customClass="NetShowBridgeViewController"' not in s:
     p.write_text(s)
 PY
 echo 'Open ios/App/App.xcworkspace (or App.xcodeproj for SwiftPM) in Xcode.'
-echo 'Check that the two Swift source files belong to the App target (Target Membership).'
+echo 'Check that all three Swift source files belong to the App target (Target Membership).'
 echo 'Choose an Apple Development team, connect iPhone, then Run.'

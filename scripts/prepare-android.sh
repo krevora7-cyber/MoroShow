@@ -5,7 +5,7 @@ if [[ "${VITE_NETSHOW_API_BASE:-}" != https://* ]]; then
  echo 'Set VITE_NETSHOW_API_BASE=https://YOUR_BACKEND_HOST first.' >&2
  exit 1
 fi
-npm run build
+npm run build -- --outDir native-dist
 if [[ ! -d android/app ]]; then npx cap add android; fi
 npx cap sync android
 # Launcher artwork is separate from the text-only in-app welcome screen.
@@ -25,4 +25,5 @@ manifest=Path('android/app/src/main/AndroidManifest.xml')
 s=manifest.read_text().replace('@mipmap/ic_launcher_round','@drawable/moroshow_launcher').replace('@mipmap/ic_launcher','@drawable/moroshow_launcher')
 manifest.write_text(s)
 ICON_PY
-npx cap open android
+node scripts/install-native-protection.mjs
+if [[ "${MORO_NO_OPEN:-0}" != 1 ]]; then npx cap open android; fi
