@@ -1,7 +1,7 @@
 import {apiFetch} from './netshowApi';
 type Entry={until:number;data:any};
 const memory=new Map<string,Entry>(),pending=new Map<string,Promise<any>>();
-export function catalogKey(path:string){const u=new URL(path,'https://cache.invalid');for(const [k,v] of [...u.searchParams])if(v===''||k==='retry'&&v==='0')u.searchParams.delete(k);if(u.pathname==='/api/web-sources/catalog'){if(u.searchParams.get('page')==='1')u.searchParams.delete('page');}u.searchParams.sort();return u.pathname+'?'+u.searchParams;}
+export function catalogKey(path:string){const u=new URL(path,'https://cache.invalid');for(const [k,v] of [...u.searchParams])if(v===''||k==='retry'&&v==='0')u.searchParams.delete(k);if(u.pathname==='/api/web-sources/catalog'){u.searchParams.delete('category');u.searchParams.delete('lang');if(u.searchParams.get('page')==='1')u.searchParams.delete('page');}u.searchParams.sort();return u.pathname+'?'+u.searchParams;}
 // Only catalog metadata is cached; keys retain profile, Kids mode, and filters.
 export async function catalogJson(path:string,persist=false):Promise<any>{
  const key=catalogKey(path),now=Date.now(),retry=new URL(path,'https://cache.invalid').searchParams.has('retry');let hit=memory.get(key);

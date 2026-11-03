@@ -1,6 +1,6 @@
 export const RULES_URL='https://moro-show.vercel.app/playback-blocklist.json';
 export const BUNDLED_RULES={version:1,hosts:['doubleclick.net','googlesyndication.com','googleadservices.com','adsterra.com','adsterra.net','popads.net','popcash.net','propellerads.com','onclickads.net','onclkds.com','exoclick.com','exosrv.com','trafficjunky.net','juicyads.com','adnxs.com','adskeeper.com','mgid.com','hilltopads.net','clickadu.com','clickaine.com']};
-const reserved=['cinezo.live','vidsrc.mov','vidlink.pro','vidsrc.sh','dramatip.net','vercel.app','supabase.co','themoviedb.org','tmdb.org','trycloudflare.com','localhost'];
+const reserved=['cinesrc.st','cinezo.live','vidsrc.mov','vidlink.pro','vidsrc.sh','dramatip.net','vercel.app','supabase.co','themoviedb.org','tmdb.org','trycloudflare.com','localhost'];
 export type ProtectionRules={version:number;hosts:string[]};
 export function validateRules(value:unknown):ProtectionRules|null{
  const x=value as ProtectionRules;if(!x||!Number.isSafeInteger(x.version)||x.version<1||!Array.isArray(x.hosts)||!x.hosts.length||x.hosts.length>2000)return null;
@@ -15,3 +15,4 @@ export async function loadProtectionRules(force=false,storage:Pick<Storage,'getI
  try{const response=await request(RULES_URL,{redirect:'error',credentials:'omit',cache:'no-store',signal:AbortSignal.timeout(5000)});if(!response.ok)throw Error('Rules update unavailable');const text=await response.text();if(text.length>150000)throw Error('Rules list too large');const next=validateRules(JSON.parse(text));if(!next||next.version<rules.version)throw Error('Invalid rules update');rules=next;try{storage.setItem(cacheKey,JSON.stringify({rules,checkedAt:Date.now()}));}catch{}return {rules,updated:true};}catch{return {rules,updated:false};}
 }
 export function protectionEnabled(){try{return localStorage.getItem('moro-player-protection')!=='off';}catch{return true;}}
+
