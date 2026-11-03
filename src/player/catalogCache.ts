@@ -5,8 +5,8 @@ export function catalogKey(path:string){const u=new URL(path,'https://cache.inva
 // Only catalog metadata is cached; keys retain profile, Kids mode, and filters.
 export async function catalogJson(path:string,persist=false):Promise<any>{
  const key=catalogKey(path),now=Date.now(),retry=new URL(path,'https://cache.invalid').searchParams.has('retry');let hit=memory.get(key);
- if(!hit&&persist){try{hit=JSON.parse(sessionStorage.getItem('moro-catalog:500:'+key)||'null');}catch{}}
+ if(!hit&&persist){try{hit=JSON.parse(sessionStorage.getItem('moro-catalog:501:'+key)||'null');}catch{}}
  if(!retry&&hit&&hit.until>now)return hit.data;
- const refresh=()=>{if(!pending.has(key))pending.set(key,(async()=>{const r=await apiFetch(path,{signal:AbortSignal.timeout(30000)});const data=await r.json();if(!r.ok||!data.success)throw new Error(data.error||'Catalog could not be loaded.');const entry={data,until:Date.now()+180000};if(memory.size>=80)memory.delete(memory.keys().next().value!);memory.set(key,entry);if(persist)try{sessionStorage.setItem('moro-catalog:500:'+key,JSON.stringify(entry));}catch{}return data;})().finally(()=>pending.delete(key)));return pending.get(key)!;};
+ const refresh=()=>{if(!pending.has(key))pending.set(key,(async()=>{const r=await apiFetch(path,{signal:AbortSignal.timeout(30000)});const data=await r.json();if(!r.ok||!data.success)throw new Error(data.error||'Catalog could not be loaded.');const entry={data,until:Date.now()+180000};if(memory.size>=80)memory.delete(memory.keys().next().value!);memory.set(key,entry);if(persist)try{sessionStorage.setItem('moro-catalog:501:'+key,JSON.stringify(entry));}catch{}return data;})().finally(()=>pending.delete(key)));return pending.get(key)!;};
  if(!retry&&hit&&hit.until+1800000>now){void refresh().catch(()=>{});return hit.data;}return refresh();
 }

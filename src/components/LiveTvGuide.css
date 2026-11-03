@@ -24,3 +24,23 @@
 @media(max-width:900px){.tv-room.tv-smarters{grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto minmax(260px,1fr) auto;height:calc(100dvh - 170px);min-height:480px;padding:8px;gap:8px;border-radius:0}.tv-smarters .tv-frame{grid-column:1;grid-row:1;max-height:36dvh;aspect-ratio:16/9}.tv-sources{grid-column:1;grid-row:2}.tv-smarters .tv-browser{grid-column:1;grid-row:3;grid-template-columns:35% minmax(0,1fr);gap:6px}.tv-smarters .tv-category-rail{border-radius:18px;padding:6px}.tv-smarters .tv-categories button{font-size:12px;padding:8px 6px}.tv-smarters .tv-search{gap:3px}.tv-smarters .tv-search input{font-size:11px}.tv-smarters .tv-search button{padding:2px}.tv-smarters .tv-search>svg{display:none}.tv-smarters .tv-controls{gap:3px}.tv-smarters .tv-volume{display:none}.tv-smarters .tv-overlay-bottom>strong{font-size:15px}.tv-smarters .tv-channel-select{min-height:58px}.tv-smarters .tv-open-guide{grid-row:3}}
 
 .tv-smarters .tv-frame:fullscreen{height:100dvh!important;max-height:none!important;border:0;border-radius:0;aspect-ratio:auto}.tv-card-kicker{font-size:9px;letter-spacing:1px}.tv-volume{width:55px;pointer-events:auto}.tv-row-icon{display:grid;place-items:center;overflow:hidden}.tv-guide-filters select{color:white;width:100%;padding:8px;border:1px solid #333;border-radius:12px}.tv-smarters .tv-categories b{background:none;color:inherit;width:auto;height:auto}
+
+/* Wide-screen guide: two compact lists beside a full-height playback canvas. */
+@media(min-width:901px){
+ .m-tv-page main{height:100dvh!important;min-height:0!important;overflow:hidden;padding-top:12px!important;padding-bottom:12px!important}
+ .tv-room.tv-smarters{height:calc(100dvh - 24px);min-height:0;margin:0;grid-template-columns:minmax(380px,36%) minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto auto;gap:10px;padding:0;border-radius:12px}
+ .tv-smarters .tv-frame{grid-row:1;height:100%!important;aspect-ratio:auto;align-self:stretch;border:0;border-radius:0}
+ .tv-smarters .tv-browser{grid-row:1/4;grid-template-columns:40% minmax(0,1fr);gap:1px;background:#343438!important}
+ .tv-smarters .tv-category-rail{border:0;border-radius:0;background:#202024;padding:8px}
+ .tv-smarters .tv-categories button{border-radius:5px!important;min-height:48px}
+ .tv-smarters .tv-categories button[aria-pressed=true]{background:#ffffff20!important;color:white!important;box-shadow:inset 3px 0 #fff}
+ .tv-smarters .tv-channel-pane{background:#17171b}.tv-smarters .tv-channel.selected{background:#ffffff20;border-radius:4px}
+ .tv-attribution{grid-column:2;grid-row:3;padding:0 10px}.tv-attribution p{max-height:90px;overflow:auto}
+ .tv-room:not(.tv-drawer-open){grid-template-columns:1fr}.tv-room:not(.tv-drawer-open) .tv-frame,.tv-room:not(.tv-drawer-open) .tv-sources,.tv-room:not(.tv-drawer-open) .tv-attribution{grid-column:1}
+ .tv-smarters .tv-open-guide{z-index:6;position:absolute;left:16px;top:16px}
+}
+.tv-smarters .tv-volume{position:absolute;right:22px;top:50%;transform:translateY(-50%);writing-mode:vertical-lr;direction:rtl;width:22px;height:140px;accent-color:#fff;pointer-events:auto}
+.tv-smarters .tv-overlay:not(.shown) .tv-volume{pointer-events:none}
+.tv-smarters .tv-idle{background:#050505!important}
+.tv-smarters .tv-search{min-height:46px;border-bottom:1px solid #ffffff12;padding:6px}
+@media(max-width:900px){.tv-smarters .tv-volume{display:block;height:90px;right:12px}.tv-smarters .tv-search input{font-size:12px}.tv-room.tv-smarters{min-height:0}.tv-smarters .tv-channel-pane .tv-search{flex-shrink:0}}

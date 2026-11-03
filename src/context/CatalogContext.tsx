@@ -135,6 +135,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const startPlayback = async (item: CatalogItem, resumeTime?: number, variantId?: string) => {
     if (!activeProfile) return;
+    if(item.id.startsWith('iptv:')&&(!variantId||variantId==='vidlink'))variantId='auto';
     if(!variantId&&item.id.startsWith('drama:'))variantId='shorts';
     if(!variantId){setPlaybackError(null);setPendingPlayback(item);return;}
 

@@ -12,6 +12,7 @@ export function LiveTvGuide(){
  const {activeProfile,favorites,toggleFavorite}=useProfile();
  const [groups,setGroups]=useState(DEFAULT_GROUPS),[category,setCategory]=useState('all'),[search,setSearch]=useState(''),[query,setQuery]=useState(''),[channels,setChannels]=useState<Channel[]>([]),[cursor,setCursor]=useState<string|null>(null),[page,setPage]=useState(''),[loading,setLoading]=useState(true),[listError,setListError]=useState(''),[listRetry,setListRetry]=useState(0);
  const [sourceId,setSourceId]=useState(''),[activeSource,setActiveSource]=useState('');
+ const [categorySearch,setCategorySearch]=useState('');
  const [drawer,setDrawer]=useState(true);const [sort,setSort]=useState('az');
  const [selected,setSelected]=useState<Channel|null>(null),[retry,setRetry]=useState(0),[connecting,setConnecting]=useState(false),[error,setError]=useState(''),[paused,setPaused]=useState(true),[muted,setMuted]=useState(false),[quality,setQuality]=useState(-1),[levels,setLevels]=useState<{height:number;index:number}[]>([]),[controls,setControls]=useState(true);
  const videoRef=useRef<HTMLVideoElement>(null),frameRef=useRef<HTMLDivElement>(null),hlsRef=useRef<Hls|null>(null),playAttempt=useRef(0),autoRetries=useRef(0),failedSources=useRef<string[]>([]),hideTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
@@ -87,7 +88,7 @@ export function LiveTvGuide(){
   <div className="tv-browser" hidden={!drawer}>
    <div className="tv-guide-heading"><strong>Channels</strong><button aria-label="Close channel guide" onClick={()=>setDrawer(false)}><X size={20}/></button></div>
    {selected&&<div className="tv-now-card"><span className="tv-now-icon">{selected.name.slice(0,1)}</span><div><small>NOW PLAYING</small><strong>{selected.name}</strong><p>{now?.title||'No programme information'}</p></div></div>}
-   <div className="tv-channel-pane">
+   <div className="tv-channel-pane"><div className="tv-search"><Search size={16}/><input aria-label="Search channels" placeholder="Find a channel" value={search} onChange={e=>setSearch(e.target.value)}/><button aria-label="Refresh channels" onClick={()=>setListRetry(n=>n+1)}><RotateCw size={15}/></button></div>
 
     <div className="tv-guide-filters"><select aria-label="Sort channels" value={sort} onChange={e=>setSort(e.target.value)}><option value="az">A–Z</option><option value="za">Z–A</option><option value="favorites">Favorites first</option></select><select aria-label="Channel category or country" value={category} onChange={e=>changeCategory(e.target.value)}>{groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
     <div className="tv-list-label"><span>{groups.find(g=>g.id===category)?.name||'Channels'}</span><small>{channels.length}{cursor?'+':''}</small></div>
@@ -99,7 +100,7 @@ export function LiveTvGuide(){
      {cursor&&!loading&&!listError&&<button className="tv-more" onClick={()=>setPage(cursor)}>More channels <ChevronDown size={15}/></button>}
     </div>
    </div>
-   <aside className="tv-category-rail">    <div className="tv-search"><Search size={16}/><input aria-label="Search channels" placeholder="Find a channel" value={search} onChange={e=>setSearch(e.target.value)}/><button aria-label="Refresh channels" onClick={()=>setListRetry(n=>n+1)}><RotateCw size={15}/></button></div><nav className="tv-categories" aria-label="TV categories">{groups.map(g=><button key={g.id} aria-pressed={category===g.id} onClick={()=>changeCategory(g.id)}><span>{g.name}</span><b>{g.count??g.badge}</b></button>)}</nav></aside>
+   <aside className="tv-category-rail">    <div className="tv-search"><Search size={16}/><input aria-label="Search categories" placeholder="Categories" value={categorySearch} onChange={e=>setCategorySearch(e.target.value)}/></div><nav className="tv-categories" aria-label="TV categories">{groups.filter(g=>g.name.toLowerCase().includes(categorySearch.toLowerCase())).map(g=><button key={g.id} aria-pressed={category===g.id} onClick={()=>changeCategory(g.id)}><span>{g.name}</span><b>{g.count??g.badge}</b></button>)}</nav></aside>
   </div>
   <details className="tv-attribution"><summary>Channel directories</summary><p>IPTV-org · IPTV Nexus · Free Public IPTV · <a href="https://github.com/streamline-iptv/iptv-playlists" target="_blank" rel="noreferrer">Doubo</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>). Lists combined and normalized. Availability varies by region and source.</p></details>
  </section>;
