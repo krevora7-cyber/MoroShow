@@ -1,4 +1,5 @@
-import {needsVideoCompatibility,compatibilityLease,registerShortsCompatibility} from './shortsCompatibility';
+import {prepareShort} from './shortsPreparation';
+import {compatibilityLease,registerShortsCompatibility} from './shortsCompatibility';
 import {dramaCatalog,dramaDetails,resolveDramaEpisodeSource,discoverDramaEpisodeSubtitles,parseDramaIdentity} from './dramaSource';
 import {randomUUID} from 'node:crypto';
 import {mediaLease,subtitleLease,registerDramaMedia} from './dramaPlayback';
@@ -6,15 +7,17 @@ import type { Express, Request } from 'express';
 import type { CatalogItem } from '../types';
 import { db } from './db';
 export const EMBED_SERVERS = [
- {id:'cinezo',name:'Cinezo',origin:'https://player.cinezo.live',prefix:'/embed'},
- {id:'vidsrc-mov',name:'VidSrc.mov',origin:'https://vidsrc.mov',prefix:'/embed'},
- {id:'vidlink',name:'VidLink.pro',origin:'https://vidlink.pro',prefix:''},
- {id:'vidsrc-sh',name:'VidSrc.sh',origin:'https://vidsrc.sh',prefix:'/embed'},
+ {id:'cinesrc',name:'Source 1',origin:'https://cinesrc.st',prefix:'/embed'},
+ {id:'cinezo',name:'Source 2',origin:'https://player.cinezo.live',prefix:'/embed'},
+ {id:'vidsrc-mov',name:'Source 3',origin:'https://vidsrc.mov',prefix:'/embed'},
+ {id:'vidlink',name:'Source 4',origin:'https://vidlink.pro',prefix:''},
+ {id:'vidsrc-sh',name:'Source 5',origin:'https://vidsrc.sh',prefix:'/embed'},
 ] as const;
 export function embedUrl(server:string,type:string,id:number,season?:number,episode?:number){
  const p=EMBED_SERVERS.find(x=>x.id===server);
  if(!p||!['movie','tv'].includes(type)||!Number.isSafeInteger(id)||id<1)throw new Error('Invalid player selection');
  if(type==='tv'&&![season,episode].every(n=>Number.isSafeInteger(n)&&n!>0))throw new Error('Select an episode first');
+ if(server==='cinesrc')return `${p.origin}/embed/${type}/${id}?autoplay=false&autonext=false${type==='tv'?`&s=${season}&e=${episode}`:''}`;
  return `${p.origin}${p.prefix}/${type}/${id}${type==='tv'?`/${season}/${episode}`:''}`;
 }
 const cache=new Map<string,{expires:number;data:any}>(),inflight=new Map<string,Promise<any>>();
@@ -93,10 +96,11 @@ export function registerWebSources(app:Express){
  const id=webId(req.params.id);if(id.type!=='tv')throw new Error('Not a series');const d=await allowed(id,p.isKid),seasons=(d.seasons||[]).filter((s:any)=>s.season_number>0).map((s:any)=>s.season_number);const season=number(req.query.season,seasons[0]||1);if(!seasons.includes(season))return res.json({success:true,seasons,episodes:[],season});
  const part=await tmdb(`tv/${id.id}/season/${season}`);const episodes=(part.episodes||[]).filter(released).map((e:any)=>({...toMovie(d,'tv',p.isKid),id:`w32:tv:${id.id}:${season}:${e.episode_number}`,name:e.name,season,episode:e.episode_number,backdropUrl:img(e.still_path,'w780'),overview:e.overview}));res.json({success:true,episodes,seasons,season});
  }catch(e:any){res.status(502).json({success:false,error:publicError(e)});}});
+ app.post('/api/shorts/prepare',async(req,res)=>{try{const p=profile(req);if(p.isKid)return res.sendStatus(403);const id=String(req.body.contentId||''),identity=parseDramaIdentity(id),details=await dramaDetails(identity.seriesId);if(!details.episodes.some(e=>e.id===id))return res.sendStatus(404);await prepareShort(id,req.socket.localPort!,true);res.json({success:true});}catch{res.status(502).json({success:false,error:'Episode preparation unavailable'});}});
  app.post('/api/stream/token',async(req,res,next)=>{
- if(!/^(w32:|ani:|drama:|short:)/.test(String(req.body.contentId)))return next();try{const p=profile(req);let playbackNote:string|undefined;let content:CatalogItem,url:string,variants:{id:string;label:string}[],variantId=String(req.body.variantId||'cinezo');
+ if(!/^(w32:|ani:|drama:|short:)/.test(String(req.body.contentId)))return next();try{const p=profile(req);let playbackNote:string|undefined;let content:CatalogItem,url:string,variants:{id:string;label:string}[],variantId=String(req.body.variantId||'cinesrc');
  if(String(req.body.contentId).startsWith('short:'))throw new Error('Find this title again in Shorts.');
- if(String(req.body.contentId).startsWith('drama:')){if(p.isKid)throw new Error('No verified Kids rating');const id=String(req.body.contentId),identity=parseDramaIdentity(id),d=await dramaDetails(identity.seriesId);const ep=d.episodes.find(e=>e.id===id);if(!ep)throw new Error('Select an available episode');const source=await resolveDramaEpisodeSource(id);let lease=mediaLease(source.url);const local='http://127.0.0.1:'+req.socket.localPort+lease;const compatible=req.body.compatibility===true||await needsVideoCompatibility(local);if(compatible)lease=compatibilityLease(local);return res.json({success:true,token:randomUUID(),streamUrl:lease,streamType:compatible?'hls':source.streamType,subtitles:source.subtitles.map(sub=>({...sub,url:subtitleLease(sub.url)})),variantId:'shorts',variants:[{id:'shorts',label:'Shorts'}],content:ep});}
+ if(String(req.body.contentId).startsWith('drama:')){if(p.isKid)throw new Error('No verified Kids rating');const id=String(req.body.contentId),identity=parseDramaIdentity(id),d=await dramaDetails(identity.seriesId);const ep=d.episodes.find(e=>e.id===id);if(!ep)throw new Error('Select an available episode');const prepared=await prepareShort(id,req.socket.localPort!);if(!prepared)throw Error('Episode preparation unavailable');const {source,local}=prepared;let lease=prepared.lease;const compatible=req.body.compatibility===true||prepared.compatible;if(compatible)lease=compatibilityLease(local);return res.json({success:true,token:randomUUID(),streamUrl:lease,streamType:compatible?'hls':source.streamType,subtitles:source.subtitles.map(sub=>({...sub,url:subtitleLease(sub.url)})),variantId:'shorts',variants:[{id:'shorts',label:'Shorts'}],content:ep});}
  else{const id=webId(req.body.contentId),d=await allowed(id,p.isKid);url=embedUrl(variantId,id.type,id.id,id.season,id.episode);if(id.type==='tv'){const part=await tmdb(`tv/${id.id}/season/${id.season}`);if(!(part.episodes||[]).some((e:any)=>e.episode_number===id.episode&&released(e)))throw new Error('Episode is not released or available');}content={...toMovie(d,id.type,p.isKid),id:req.body.contentId,season:id.season,episode:id.episode};variants=EMBED_SERVERS.map(s=>({id:s.id,label:s.name}));}
  const direct=false;
  res.json({success:true,token:direct?randomUUID():'',streamUrl:direct?url:'',streamType:'hls',...(direct?{}:{embedUrl:url}),variantId,variants,content,playbackNote});

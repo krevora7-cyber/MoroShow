@@ -4,7 +4,7 @@ import {createServer as createViteServer} from 'vite';
 import {db} from './src/server/db';
 import {registerAccountAuth} from './src/server/accountAuth';
 import {registerWebSources} from './src/server/webSources';
-import {registerGeilTv} from './src/server/geilTv';
+import {registerPublicTv} from './src/server/publicTv';
 const app=express();
 const PORT=Number(process.env.PORT||3000);
 app.use(express.json({limit:'1mb'}));
@@ -19,7 +19,7 @@ app.use((req,res,next)=>{
 });
 app.get('/api/version',(_req,res)=>res.json({name:'MoroShow',version:'4.12.0',movies:'TMDB',animation:'TMDB genre 16',tv:'GEIL'}));
 registerAccountAuth(app);
-registerGeilTv(app);
+registerPublicTv(app);
 registerWebSources(app);
 // Legacy TV and event endpoints remain disabled.
 app.use(['/api/catalog','/api/events','/api/stream/proxy','/api/netshow','/api/tv'],(_req,res)=>res.status(410).json({success:false,error:'TV is temporarily disabled.'}));
@@ -141,3 +141,4 @@ async function start(){
  app.listen(PORT,'0.0.0.0',()=>console.log(`[MoroShow] Ready on http://localhost:${PORT}`));
 }
 void start();
+
