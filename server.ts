@@ -1,3 +1,4 @@
+import {iptvEnabled} from './src/server/iptvAccounts';
 import {registerIptvVod} from './src/server/iptvVod';
 import 'dotenv/config';
 import express, {type Request, type Response} from 'express';
@@ -18,7 +19,7 @@ app.use((req,res,next)=>{
  if(req.method==='OPTIONS')return res.sendStatus(origin&&!trustedOrigins.has(origin)?403:204);
  next();
 });
-app.get('/api/version',(_req,res)=>res.json({name:'MoroShow',version:'4.12.0',movies:'TMDB',animation:'TMDB genre 16',tv:'GEIL'}));
+app.get('/api/version',(_req,res)=>res.json({name:'MoroShow',version:'4.12.8',movies:iptvEnabled()?'IPTV':'TMDB',animation:iptvEnabled()?'IPTV':'TMDB genre 16',tv:'Unified directories + IPTV'}));
 registerAccountAuth(app);
 registerPublicTv(app);
 registerIptvVod(app);

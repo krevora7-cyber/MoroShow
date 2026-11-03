@@ -32,7 +32,10 @@ export async function refreshAccounts(){if(!iptvEnabled())return;if(pending)retu
  if(live.length||vod.length){snapshots.set(host,{live,vod});revision++;break;}
  }catch{/* Preserve last successful snapshot; never log credential-bearing errors. */}}}updated=Date.now();})().finally(()=>{pending=undefined;});return pending;}
 async function ready(){const work=refreshAccounts();if(snapshots.size)return;await Promise.race([work,new Promise<void>(resolve=>{const until=Date.now()+20000;const poll=()=>{if(snapshots.size||Date.now()>until)resolve();else setTimeout(poll,100);};poll();})]);}
-export async function iptvLive(){await ready();return [...snapshots.values()].flatMap(s=>s.live);}
+export function normalizeLiveName(name:string){return names(name).replace(/\(\s*BACKUP(?:\s*\d+)?\s*\)/ig,'').replace(/\bBACKUP(?:\s*\d+)?\b/ig,'').replace(/(?:[ |_-]+(?:LIVE|SS|LQ|HQ|NX))+$/ig,'').replace(/\s*\(\d+\)\s*$/,'').replace(/\s+/g,' ').trim();}
+export function mergeAccountChannels(rows:PublicChannel[]){const groups=new Map<string,PublicChannel>();for(const c of rows){if(/[●★]/.test(c.name)&&/^[- |●★]+/.test(c.name))continue;const name=normalizeLiveName(c.name),id=name.toLowerCase()+'|'+c.country+'|'+c.language;const old=groups.get(id);if(old){const urls=new Set(old.sources.map(s=>s.url));for(const s of c.sources)if(!urls.has(s.url)){old.sources.push(s);urls.add(s.url);}}else groups.set(id,{...c,name,category:normalizeLiveName(c.category),sources:[...c.sources]});}return [...groups.values()];}
+let liveVersion=-1,mergedLive:PublicChannel[]=[];
+export async function iptvLive(){await ready();if(liveVersion!==revision){mergedLive=mergeAccountChannels([...snapshots.values()].flatMap(s=>s.live));liveVersion=revision;}return mergedLive;}
 export const iptvRevision=()=>revision;
 export async function vodCatalog(){await ready();if(mergedVersion!==revision){mergedVod=mergeVod([...snapshots.values()].flatMap(s=>s.vod));mergedVersion=revision;}return mergedVod;}
 export const publicVod=(v:Vod):CatalogItem=>{const {origins,...item}=v;const image=(u?:string)=>u?(process.env.RENDER_EXTERNAL_URL||'')+lease(u):undefined;return {...item,logoUrl:image(item.logoUrl),backdropUrl:image(item.backdropUrl)};};

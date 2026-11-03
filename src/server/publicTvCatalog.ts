@@ -28,6 +28,9 @@ export function mergePublicChannels(rows:PublicChannel[]):PublicChannel[]{
  for(const c of rows)if(c.tvgId){const id=normal(c.tvgId);add('name:'+normal(c.name)+'|'+c.country+'|'+c.language,id);add('loose:'+normal(c.name)+'|'+c.language,id);for(const s of c.sources)add('url:'+s.url,id);}
  const unique=(key:string)=>{const a=aliases.get(key);return a?.size===1?[...a][0]:undefined;};const merged=new Map<string,PublicChannel>();
  for(const c of rows){const identity=normal(c.tvgId)||unique('name:'+normal(c.name)+'|'+c.country+'|'+c.language)||(!c.country?unique('loose:'+normal(c.name)+'|'+c.language):undefined)||(!c.country&&!c.language?unique('url:'+c.sources[0].url):undefined);const key=identity?'id:'+identity:'name:'+normal(c.name)+'|'+c.country+'|'+c.language;
- const old=merged.get(key);if(!old){merged.set(key,{...c,id:'public:'+hash(key),sources:[...c.sources]});continue;}for(const source of c.sources)if(!old.sources.some(s=>s.url===source.url)&&old.sources.length<24)old.sources.push(source);old.logoUrl ||= c.logoUrl;if(old.category==='Other')old.category=c.category;
- }return [...merged.values()].sort((a,b)=>a.name.localeCompare(b.name));
+ const old=merged.get(key);if(!old){merged.set(key,{...c,id:'public:'+hash(key),sources:[...c.sources]});continue;}for(const source of c.sources)if(!old.sources.some(s=>s.url===source.url))old.sources.push(source);old.logoUrl ||= c.logoUrl;if(old.category==='Other')old.category=c.category;
+ }return [...merged.values()].map(c=>({...c,sources:diverseFeeds(c.sources)})).sort((a,b)=>a.name.localeCompare(b.name));
 }
+
+// Keep alternatives from every provider before adding more quality renditions.
+export function diverseFeeds(feeds:Feed[]){const groups=new Map<string,Feed[]>();for(const f of feeds){if(!groups.has(f.provider))groups.set(f.provider,[]);groups.get(f.provider)!.push(f);}const out:Feed[]=[];for(let n=0;out.length<24;n++){let added=false;for(const rows of groups.values()){if(rows[n]&&out.length<24){out.push(rows[n]);added=true;}}if(!added)break;}return out;}
