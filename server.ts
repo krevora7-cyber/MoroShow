@@ -1,3 +1,4 @@
+import {registerIptvVod} from './src/server/iptvVod';
 import 'dotenv/config';
 import express, {type Request, type Response} from 'express';
 import {createServer as createViteServer} from 'vite';
@@ -20,6 +21,7 @@ app.use((req,res,next)=>{
 app.get('/api/version',(_req,res)=>res.json({name:'MoroShow',version:'4.12.0',movies:'TMDB',animation:'TMDB genre 16',tv:'GEIL'}));
 registerAccountAuth(app);
 registerPublicTv(app);
+registerIptvVod(app);
 registerWebSources(app);
 // Legacy TV and event endpoints remain disabled.
 app.use(['/api/catalog','/api/events','/api/stream/proxy','/api/netshow','/api/tv'],(_req,res)=>res.status(410).json({success:false,error:'TV is temporarily disabled.'}));
