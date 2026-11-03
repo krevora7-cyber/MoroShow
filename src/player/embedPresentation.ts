@@ -4,7 +4,7 @@ export function embedStartUrl(url:string,resumeTime?:number){
  return parsed.href;
 }
 export function orderEmbedVariants<T extends {id:string}>(variants:readonly T[],ios:boolean):T[]{
- const order=['cinezo','vidsrc-mov','vidlink','vidsrc-sh'];
+ const order=['cinesrc','cinezo','vidsrc-mov','vidlink','vidsrc-sh'];
  return [...variants].sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
 }
 // All selected servers render inside the app. External playback is never forced.

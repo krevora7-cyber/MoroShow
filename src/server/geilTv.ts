@@ -91,8 +91,9 @@ export function lease(value:string){const url=safeUrl(value).href;const old=keys
  const id=randomBytes(24).toString('hex');leases.set(id,{url,until:Date.now()+3600000});keys.set(url,id);return '/api/live/media/'+id;
 }
 export function rewrite(text:string,base:string){return text.split(/\r?\n/).map(line=>!line.trim()?line:line.startsWith('#')?line.replace(/URI="([^"]+)"/g,(_,u)=>`URI="${lease(safeUrl(u,base).href)}"`):lease(safeUrl(line.trim(),base).href)).join('\n');}
-export function registerGeilTv(app:Express){
+export function registerGeilTv(app:Express,mediaOnly=false){
  app.use('/api/live',(req,res,next)=>{if(req.path.startsWith('/media/'))return next();const id=String(req.query.profileId||req.body?.profileId||'');const p=db.getProfileById(id);if(!p)return res.status(401).json({success:false,error:'Select a profile first.'});if(p.isKid)return res.status(403).json({success:false,error:'Live TV is not available in Kids profiles.'});next();});
+ if(!mediaOnly){
  app.get('/api/live/channels',async(req,res)=>{try{
  const cat=String(req.query.category||'bein').slice(0,100),search=String(req.query.search||'').trim().slice(0,80),cursor=String(req.query.cursor||'');if(cursor&&!/^\d{1,8}$/.test(cursor))return res.status(400).json({success:false,error:'Invalid page'});
  const data=await providerJson(catalogPath(cat,search,cursor));let items=(data.items||[]).map(publicChannel).filter(Boolean);if(cat==='bein'||cat.startsWith('bein:'))items=items.filter((i:any)=>cat.includes(':tr:')?/bein/i.test(i.name):/bein\s*sports?/i.test(i.name));if(cat.startsWith('bein:')){const quality=cat.split(':')[2];items=items.filter((i:any)=>quality==='all'||quality==='sd'?quality==='all'||/\bSD\b|\bLOW\b/i.test(i.name):quality==='fhd'?/\bFHD\b|\bUHD\b/i.test(i.name):/\bHD\b|\bHQ\b/i.test(i.name));}
@@ -110,6 +111,7 @@ export function registerGeilTv(app:Express){
  }finally{res.off('close',closed);}
 
  }catch(e:any){res.status(502).json({success:false,error:e.message||'Channel unavailable.'});}});
+ }
  app.get('/api/live/media/:id',async(req,res)=>{const v=leases.get(req.params.id);if(!v||v.until<Date.now())return res.status(410).send('Stream expired. Retry the channel.');v.until=Date.now()+3600000;const c=new AbortController();res.on('close',()=>c.abort());
  try{const range=req.headers.range;if(range&&!/^bytes=\d*-\d*$/.test(range))return res.status(416).end();const{response:r,url}=await upstream(v.url,c.signal,range);if((r.statusCode||500)>=400){r.destroy();return res.status(502).send('Channel source unavailable');}res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  const it=r[Symbol.asyncIterator](),first=await it.next(),chunk=Buffer.from(first.value||''),type=String(r.headers['content-type']||'');

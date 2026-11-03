@@ -24,7 +24,8 @@
     "test:drama-current": "node --import tsx --test tests/dramaCurrent.test.ts",
     "test:player-ui": "node --import tsx --test tests/playerPresentation.test.ts",
     "test:shorts-fixes": "node --import tsx --test tests/shorts498.test.ts tests/shorts499.test.ts",
-    "test:continuation": "node --import tsx --test tests/continuation4110.test.ts tests/profiles4110.test.ts"
+    "test:continuation": "node --import tsx --test tests/continuation4110.test.ts tests/profiles4110.test.ts",
+    "test:playback-update": "node --import tsx --test tests/publicTv.test.ts tests/publicTvRoutes.test.ts tests/shortsPreparation.test.ts tests/browserPlayback.test.ts tests/webSources.test.ts tests/dramaCurrent.test.ts tests/accountAuth.test.ts tests/geilTv.test.ts"
   },
   "dependencies": {
     "@capacitor/android": "^7.0.0",

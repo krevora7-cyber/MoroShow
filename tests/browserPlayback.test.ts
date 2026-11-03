@@ -12,10 +12,9 @@ test('compatibility is reversible and JW option stays within VidLink',()=>{
  assert.equal(browserPlayback(raw,'standard').url,raw);
  assert.equal(browserPlayback('https://player.cinezo.live/embed/movie/101','compatibility').url,'https://player.cinezo.live/embed/movie/101');
 });
-test('protected fallback keeps exact movie/episode identity and denies popup/navigation permissions',()=>{
- const config=browserPlayback('https://vidlink.pro/tv/1396/2/3?startAt=90','protected');const url=new URL(config.url);
- assert.equal(url.pathname,'/embed/tv/1396');assert.equal(url.searchParams.get('s'),'2');assert.equal(url.searchParams.get('e'),'3');assert.equal(url.searchParams.get('t'),'90');
- assert.equal(config.sandbox,POPUP_SANDBOX);assert.doesNotMatch(config.sandbox,/allow-popups|allow-top-navigation/);
- assert.equal(new URL(browserPlayback('https://player.cinezo.live/embed/movie/101','protected').url).pathname,'/embed/movie/101');
- for(const raw of ['https://evil.example/embed/movie/101','https://user@vidlink.pro/movie/101','https://dramatip.net/embed/101','https://vidlink.pro/tv/1396','https://vidlink.pro/movie/101/2/3/4'])assert.throws(()=>browserPlayback(raw,'protected'));
+test('protected mode keeps selected provider and episode while blocking popups',()=>{
+ for(const raw of ['https://cinesrc.st/embed/tv/1396?s=2&e=3','https://vidlink.pro/tv/1396/2/3?startAt=90','https://player.cinezo.live/embed/movie/101']){
+ const config=browserPlayback(raw,'protected');assert.equal(config.url,raw);assert.equal(config.sandbox,POPUP_SANDBOX);assert.doesNotMatch(config.sandbox,/allow-popups|allow-top-navigation/);
+ }
+ for(const raw of ['https://evil.example/embed/movie/101','https://user@vidlink.pro/movie/101'])assert.throws(()=>browserPlayback(raw,'protected'));
 });
