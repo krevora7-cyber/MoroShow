@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import express, {type Request, type Response} from 'express';
-import {createServer as createViteServer} from 'vite';
 import {db} from './src/server/db';
 import {registerAccountAuth} from './src/server/accountAuth';
 import {registerWebSources} from './src/server/webSources';
@@ -17,7 +16,7 @@ app.use((req,res,next)=>{
  if(req.method==='OPTIONS')return res.sendStatus(origin&&!trustedOrigins.has(origin)?403:204);
  next();
 });
-app.get('/api/version',(_req,res)=>res.json({name:'MoroShow',version:'4.12.9',movies:'TMDB',animation:'TMDB genre 16',tv:'GitHub public directories'}));
+app.get('/api/version',(_req,res)=>res.json({name:'MoroShow',version:'4.12.10',movies:'TMDB',animation:'TMDB genre 16',tv:'GitHub public directories'}));
 registerAccountAuth(app);
 registerPublicTv(app);
 registerWebSources(app);
@@ -133,10 +132,12 @@ app.delete('/api/profiles/:id/favorites/:contentId', (req: Request, res: Respons
 app.use('/api',(_req,res)=>res.status(404).json({success:false,error:'Endpoint not available in this version.'}));
 async function start(){
  if(process.env.NODE_ENV==='production'){
+  app.use('/assets',express.static('dist/assets',{maxAge:'1y',immutable:true}));
   app.use(express.static('dist'));
   app.get('*',(_req,res)=>res.sendFile('dist/index.html',{root:'.'}));
  }else{
-  const vite=await createViteServer({server:{middlewareMode:true},appType:'spa'});app.use(vite.middlewares);
+  const {createServer}=await import('vite');
+  const vite=await createServer({server:{middlewareMode:true},appType:'spa'});app.use(vite.middlewares);
  }
  app.listen(PORT,'0.0.0.0',()=>console.log(`[MoroShow] Ready on http://localhost:${PORT}`));
 }

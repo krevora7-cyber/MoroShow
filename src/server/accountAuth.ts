@@ -1,8 +1,10 @@
+import {singleFlight} from './singleFlight';
 import type {Express,Request,Response,NextFunction} from 'express';
 import {NetShowDatabase,withAccountDatabase} from './db';
 export function registerAccountAuth(app:Express){
  const url=String(process.env.SUPABASE_URL||'').replace(/\/$/,'');const key=String(process.env.SUPABASE_PUBLISHABLE_KEY||'');
  const enabled=!!(url&&key);
+ const userRead=singleFlight<{status:number;body:any}>(),stateRead=singleFlight<any[]>();
  app.get('/api/auth/config',(_req,res)=>res.json({enabled}));
  if(!enabled)return;
  if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(url))throw new Error('Invalid SUPABASE_URL');
@@ -25,19 +27,20 @@ export function registerAccountAuth(app:Express){
   }
   const headers={apikey:key,Authorization:`Bearer ${token}`};
   try{
-   const auth=await fetch(`${url}/auth/v1/user`,{headers,signal:AbortSignal.timeout(10000)});
+   const auth=await userRead(token,async()=>{const r=await fetch(`${url}/auth/v1/user`,{headers,signal:AbortSignal.timeout(10000)});return {status:r.status,body:r.ok?await r.json():null};});
    if(auth.status===401||auth.status===403)return res.status(401).json({success:false,error:'Session expired. Sign in again.'});
-   if(!auth.ok)throw Error('Authentication service unavailable.');
-   const user=await auth.json();
+   if(auth.status<200||auth.status>=300)throw Error('Authentication service unavailable.');
+   const user=auth.body;
    if(!/^[a-f0-9-]{36}$/.test(String(user.id))||!user.email_confirmed_at)return res.status(401).json({success:false,error:'Confirm your email before signing in.'});
-   const row=await fetch(`${url}/rest/v1/moro_account_state?account_id=eq.${user.id}&select=state,revision`,{headers,signal:AbortSignal.timeout(10000)});
-   if(!row.ok)throw Error('Account storage is not ready. Apply the MoroShow Supabase migration.');
-   const rows=await row.json();const saved=rows[0];const database=new NetShowDatabase(saved?.state||null);const revision=saved?.revision||0;
+   const readState=async()=>{const row=await fetch(`${url}/rest/v1/moro_account_state?account_id=eq.${user.id}&select=state,revision`,{headers,signal:AbortSignal.timeout(10000)});if(!row.ok)throw Error('Account storage is not ready. Apply the MoroShow Supabase migration.');return row.json();};
+   // Mutations read their own revision. Never share a mutable database between requests.
+   const rows=req.method==='GET'?await stateRead(token,readState):await readState();const saved=rows[0]?structuredClone(rows[0]):undefined;const database=new NetShowDatabase(saved?.state||null);const revision=saved?.revision||0;
    const profileId=req.path.match(/^\/profiles\/([^/]+)/)?.[1]||String(req.query.profileId||req.body?.profileId||'');
    if(profileId&&!database.getProfileById(profileId))return res.status(404).json({success:false,error:'Profile not found in this account.'});
    const json=res.json.bind(res);let sending=false;
    res.json=((body:unknown)=>{
     if(sending)return res; sending=true;
+    if(req.method==='GET'&&req.originalUrl.split('?')[0]==='/api/profiles'&&body&&typeof body==='object')body={...body,accountId:user.id};
     void (async()=>{
      if(database.changed&&res.statusCode<400){
       const write=await fetch(`${url}/rest/v1/rpc/moro_save_state`,{method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify({expected_revision:revision,new_state:database.exportAccountState()}),signal:AbortSignal.timeout(10000)});

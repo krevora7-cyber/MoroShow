@@ -1,4 +1,4 @@
-import {previewEnabled} from './player/frontendPreview';
+import {previewEnabled} from './player/previewMode';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import {lazy,Suspense} from 'react';

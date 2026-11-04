@@ -137,6 +137,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (!activeProfile) return;
     if(item.id.startsWith('iptv:')&&(!variantId||variantId==='vidlink'))variantId='auto';
     if(!variantId&&item.id.startsWith('drama:'))variantId='shorts';
+    if(!variantId&&item.id.startsWith('w32:')){variantId='cinesrc';setPendingPlayback(item);}
     if(!variantId){setPlaybackError(null);setPendingPlayback(item);return;}
 
     playbackRequest.current?.abort();

@@ -42,7 +42,7 @@ const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const account=useAccount();
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
+  const [activeProfile, setActiveProfile] = useState<Profile | null>(()=>supabase&&!account?{id:'moro-guest',name:'Guest',avatar:'disney_01',isKid:false,hasPin:false,createdAt:0}:null);
   const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
   const [isWhoIsWatchingOpen, setIsWhoIsWatchingOpen] = useState(false);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
@@ -60,6 +60,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
       if(!res.ok)throw new Error('Profile service unavailable');
       const data = await res.json();
       if(supabase&&!account&&data.guest!==true)throw new Error('Guest browsing needs the updated backend.');
+      if(account&&data.accountId!==account.user.id)throw new Error('Account server identity could not be verified.');
       if (data.success && Array.isArray(data.profiles)) {
         setProfiles(data.profiles);
         if(!data.profiles.length)throw new Error('No profiles returned');
@@ -67,7 +68,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
         if(data.guest===true&&data.profiles[0]?.id==='moro-guest'){setActiveProfile(data.profiles[0]);setIsWhoIsWatchingOpen(false);}else{setIsWhoIsWatchingOpen(true);}
       }
     } catch (e) {
-      setConnectionError('Could not connect to the MoroShow server. Keep the Mac and tunnel running, then retry.');
+      setConnectionError('The server is taking longer to respond. Please retry in a moment.');
     } finally {
       setIsLoading(false);
     }
@@ -80,7 +81,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
   const currentProfileId=useRef(activeProfile?.id);currentProfileId.current=activeProfile?.id;
   // Fetch history and favorites when activeProfile changes
   const refreshHistory = async () => {
-    if (!activeProfile) return;
+    if (!activeProfile || isGuestProfile(activeProfile.id)) return;
     try {
       const [histRes, favRes] = await Promise.all([
         apiFetch(`/api/profiles/${activeProfile.id}/history`),

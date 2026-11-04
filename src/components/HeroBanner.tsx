@@ -8,12 +8,12 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import {Play,Plus,Check,Info} from 'lucide-react';
 import {useCatalog} from '../context/CatalogContext';
 import {useProfile} from '../context/ProfileContext';
-import {apiFetch} from '../player/netshowApi';
+import {catalogJson} from '../player/catalogCache';
 import {HeroTrailer} from './HeroTrailer';
 import type {CatalogItem} from '../types';
 export function HeroBanner({entries,clips=false}:{entries?:CatalogItem[];clips?:boolean}){
  const {movies,series,startPlayback,setSelectedSeries,activePlayback,selectedSeries,pendingPlayback}=useCatalog();const {activeProfile,isWhoIsWatchingOpen,favorites,toggleFavorite}=useProfile();
- const [netflix,setNetflix]=useState<CatalogItem[]>([]);useEffect(()=>{if(clips)return;const ac=new AbortController();apiFetch('/api/web-sources/hero/netflix?'+new URLSearchParams({profileId:activeProfile?.id||''}),{signal:ac.signal}).then(r=>r.json()).then(d=>{if(d.success&&!ac.signal.aborted)setNetflix(d.items);}).catch(()=>{});return()=>ac.abort();},[clips,activeProfile?.id]);
+ const [netflix,setNetflix]=useState<CatalogItem[]>([]);useEffect(()=>{if(clips||!activeProfile)return;let cancelled=false;catalogJson('/api/web-sources/hero/netflix?'+new URLSearchParams({profileId:activeProfile.id,kids:activeProfile.isKid?'1':'0'}),!activeProfile.isKid).then(d=>{if(!cancelled)setNetflix(d.items);}).catch(()=>{});return()=>{cancelled=true;};},[clips,activeProfile?.id,activeProfile?.isKid]);
  const list=useMemo(()=>clips?entries?.slice(0,6)||[]:netflix, [entries,netflix,clips]);
 
  const [elapsed,setElapsed]=useState(0);
@@ -24,7 +24,6 @@ export function HeroBanner({entries,clips=false}:{entries?:CatalogItem[];clips?:
  const enabled=inView&&visible&&!activePlayback&&!selectedSeries&&!pendingPlayback&&!isWhoIsWatchingOpen;
  useEffect(()=>{setSlide(0);swiper.current?.slideTo(0);},[activeProfile?.id,clips]);
  useEffect(()=>{const ob=new IntersectionObserver(([e])=>setInView(e.isIntersecting&&e.intersectionRatio>=.4),{threshold:[0,.4]});if(host.current)ob.observe(host.current);const change=()=>setVisible(!document.hidden);document.addEventListener('visibilitychange',change);return()=>{ob.disconnect();document.removeEventListener('visibilitychange',change);};},[list.length]);
- useEffect(()=>{setArt({});if(!current||clips)return;const a=new AbortController();apiFetch(`/api/media/${encodeURIComponent(current.id)}/artwork?profileId=${activeProfile?.id}`,{signal:a.signal}).then(r=>r.json()).then(d=>{if(d.success&&!a.signal.aborted)setArt(d);}).catch(()=>{});return()=>a.abort();},[current?.id,activeProfile?.id,clips]);
  useEffect(()=>{setElapsed(0);if(!enabled||clips)return;const start=performance.now();const t=setInterval(()=>setElapsed(Math.min(1,(performance.now()-start)/18000)),100);return()=>clearInterval(t);},[slide,enabled,clips]);
  useEffect(()=>{if(!enabled||list.length<2||matchMedia('(prefers-reduced-motion: reduce)').matches)return;const t=setInterval(()=>{const sw=swiper.current;if(sw)sw.activeIndex>=list.length-1?sw.slideTo(0):sw.slideNext();},18000);return()=>clearInterval(t);},[enabled,list.length,clips?0:slide]);
  if(!current)return <div className="m-hero-empty">Discover your next favourite.</div>;

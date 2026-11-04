@@ -29,7 +29,7 @@ async function tmdb(path:string,params:Record<string,string>={}){
  const url=new URL('https://api.themoviedb.org/3/'+path);for(const [k,v]of Object.entries({language:'en-US',...params}))url.searchParams.set(k,v);
  const headers:Record<string,string>={};if(key.includes('.'))headers.Authorization='Bearer '+key;else url.searchParams.set('api_key',key);
  const r=await fetch(url,{headers,signal:AbortSignal.timeout(15000)});if(!r.ok)throw new Error(`Catalog returned HTTP ${r.status}`);
- const data=await r.json();if(cache.size>=600)cache.delete(cache.keys().next().value!);cache.set(ck,{data,expires:Date.now()+300000});return data;
+ const data=await r.json();if(cache.size>=600)cache.delete(cache.keys().next().value!);cache.set(ck,{data,expires:Date.now()+900000});return data;
  })().finally(()=>inflight.delete(ck)));return inflight.get(ck)!;
 }
 export function kidsRating(d:any,type:'movie'|'tv'):string|undefined{

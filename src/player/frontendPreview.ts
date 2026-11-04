@@ -1,6 +1,6 @@
 import catalogue from './previewCatalogue.json';
 const profile={id:'preview',name:'Preview',avatar:'disney_01',isKid:false,isLocked:false};
-export function previewEnabled(){return import.meta.env.PROD&&!import.meta.env.VITE_NETSHOW_API_BASE&&location.hostname.endsWith('.vercel.app');}
+export {previewEnabled} from './previewMode';
 export async function previewFetch(path:string,init?:RequestInit):Promise<Response>{
  const url=new URL(path,location.origin);let data:any={success:true,items:[],hasMore:false,episodes:[],seasons:[],history:[],favorites:[]};let status=200;
  const all=[...catalogue.movie,...catalogue.tv];

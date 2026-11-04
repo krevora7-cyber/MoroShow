@@ -1,3 +1,4 @@
+import {catalogJson} from '../player/catalogCache';
 import {useEffect,useRef,useState} from 'react';
 import Hls from 'hls.js';
 import {Search,Heart,Play,Pause,Volume2,VolumeX,Maximize,RotateCw,Radio,ChevronDown,ChevronUp,List,X,LoaderCircle} from 'lucide-react';
@@ -19,11 +20,11 @@ export function LiveTvGuide(){
  useEffect(()=>{const t=setTimeout(()=>{setQuery(search.trim());setPage('');},350);return()=>clearTimeout(t);},[search]);
  useEffect(()=>{setSelected(null);failedSources.current=[];autoRetries.current=0;setChannels([]);setCategory('all');setPage('');},[activeProfile?.id]);
  useEffect(()=>{
- if(!activeProfile||activeProfile.isKid){setLoading(false);return;}const ac=new AbortController();setLoading(true);setListError('');
+ if(!activeProfile||activeProfile.isKid){setLoading(false);return;}const ac=new AbortController();let refreshTimer:ReturnType<typeof setTimeout>|undefined;setLoading(true);setListError('');
  if(!page)setChannels([]);
- const url='/api/live/channels?'+new URLSearchParams({profileId:activeProfile.id,category,search:query,cursor:page});
- apiFetch(url,{signal:ac.signal}).then(async r=>{const d=await r.json();if(!r.ok||!d.success)throw new Error(d.error||'Channels could not be loaded.');if(ac.signal.aborted)return;setGroups(d.groups?.length?d.groups:DEFAULT_GROUPS);setChannels(old=>page?[...new Map([...old,...d.items].map((c:Channel)=>[c.id,c])).values()]:d.items);setCursor(d.nextCursor==null?null:String(d.nextCursor));}).catch(e=>{if(!ac.signal.aborted)setListError(e.message||'Unable to load channels.');}).finally(()=>{if(!ac.signal.aborted)setLoading(false);});
- return()=>ac.abort();
+ const url='/api/live/channels?'+new URLSearchParams({profileId:activeProfile.id,category,search:query,cursor:page})+(listRetry?'&retry='+listRetry:'');
+ catalogJson(url).then(d=>{if(ac.signal.aborted)return;setGroups(d.groups?.length?d.groups:DEFAULT_GROUPS);setChannels(old=>page?[...new Map([...old,...d.items].map((c:Channel)=>[c.id,c])).values()]:d.items);setCursor(d.nextCursor==null?null:String(d.nextCursor));if(d.refreshing)refreshTimer=setTimeout(()=>setListRetry(n=>n+1),2500);}).catch(e=>{if(!ac.signal.aborted)setListError(e.message||'Unable to load channels.');}).finally(()=>{if(!ac.signal.aborted)setLoading(false);});
+ return()=>{ac.abort();clearTimeout(refreshTimer);};
  },[category,query,page,listRetry,activeProfile?.id,activeProfile?.isKid]);
  useEffect(()=>{
  const video=videoRef.current;if(!video||!selected||!activeProfile||activeProfile.isKid)return;
