@@ -121,7 +121,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   useEffect(() => {
     stopPlayback(); setPendingPlayback(null); setActiveTab('home'); setSearchQuery(''); setSelectedSeries(null); setItems([]); setMovies([]); setSeries([]);
-    try { extraItems.current=activeProfile?.isKid?[]:JSON.parse(localStorage.getItem(`moroshow-source-items:${activeProfile?.id}`)||'[]').filter((x:CatalogItem)=>(!activeProfile?.isKid||x.isKidFriendly)); }catch{extraItems.current=[];}
+    try { extraItems.current=activeProfile?.isKid?[]:JSON.parse(localStorage.getItem(`moroshow-source-items:${activeProfile?.id}`)||'[]').filter((x:CatalogItem)=>!x.id.startsWith('iptv:')&&(!activeProfile?.isKid||x.isKidFriendly)); }catch{extraItems.current=[];}
     refreshCatalog();
   }, [activeProfile?.id, activeProfile?.isKid]);
 
