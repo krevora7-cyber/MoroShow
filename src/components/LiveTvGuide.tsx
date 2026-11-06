@@ -103,7 +103,6 @@ export function LiveTvGuide(){
    </div>
    <aside className="tv-category-rail">    <div className="tv-search"><Search size={16}/><input aria-label="Search categories" placeholder="Categories" value={categorySearch} onChange={e=>setCategorySearch(e.target.value)}/></div><nav className="tv-categories" aria-label="TV categories">{groups.filter(g=>g.name.toLowerCase().includes(categorySearch.toLowerCase())).map(g=><button key={g.id} aria-pressed={category===g.id} onClick={()=>changeCategory(g.id)}><span>{g.name}</span><b>{g.count??g.badge}</b></button>)}</nav></aside>
   </div>
-  <details className="tv-attribution"><summary>Channel directories</summary><p>IPTV-org · IPTV Nexus · Free Public IPTV · <a href="https://github.com/streamline-iptv/iptv-playlists" target="_blank" rel="noreferrer">Doubo</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noreferrer">CC BY 4.0</a>). Lists combined and normalized. Availability varies by region and source.</p></details>
  </section>;
 }
 
