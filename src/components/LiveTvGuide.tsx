@@ -16,7 +16,7 @@ export function LiveTvGuide(){
  const [categorySearch,setCategorySearch]=useState('');
  const [drawer,setDrawer]=useState(true);const [sort,setSort]=useState('az');
  const [selected,setSelected]=useState<Channel|null>(null),[retry,setRetry]=useState(0),[connecting,setConnecting]=useState(false),[error,setError]=useState(''),[paused,setPaused]=useState(true),[muted,setMuted]=useState(false),[quality,setQuality]=useState(-1),[levels,setLevels]=useState<{height:number;index:number}[]>([]),[controls,setControls]=useState(true);
- const videoRef=useRef<HTMLVideoElement>(null),frameRef=useRef<HTMLDivElement>(null),hlsRef=useRef<Hls|null>(null),playAttempt=useRef(0),autoRetries=useRef(0),failedSources=useRef<string[]>([]),hideTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
+ const videoRef=useRef<HTMLVideoElement>(null),frameRef=useRef<HTMLDivElement>(null),roomRef=useRef<HTMLElement>(null),hlsRef=useRef<Hls|null>(null),playAttempt=useRef(0),autoRetries=useRef(0),failedSources=useRef<string[]>([]),hideTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
  useEffect(()=>{const t=setTimeout(()=>{setQuery(search.trim());setPage('');},350);return()=>clearTimeout(t);},[search]);
  useEffect(()=>{setSelected(null);failedSources.current=[];autoRetries.current=0;setChannels([]);setCategory('all');setPage('');},[activeProfile?.id]);
  useEffect(()=>{
@@ -63,7 +63,7 @@ export function LiveTvGuide(){
  const displayChannels=[...channels].sort((a,b)=>sort==='za'?b.name.localeCompare(a.name):sort==='favorites'?Number(favorites.includes(b.id))-Number(favorites.includes(a.id)):a.name.localeCompare(b.name));
  const now=selected?.epg?.find(p=>Date.parse(p.start)<=Date.now()&&Date.parse(p.end)>Date.now());
  if(activeProfile?.isKid)return <section className="tv-empty">Live TV is unavailable in Kids profiles.</section>;
- return <section className={`tv-room tv-cinema tv-smarters ${drawer?'tv-drawer-open':''}`} aria-label="Live TV">
+ return <section ref={roomRef} className={`tv-room tv-cinema tv-smarters ${drawer?'tv-drawer-open':''}`} aria-label="Live TV">
   <div className="tv-frame" ref={frameRef} onPointerMove={showControls} onClick={showControls}>
    <video ref={videoRef} playsInline muted={muted} onPause={()=>setPaused(true)} onPlay={()=>{setPaused(false);showControls();}} aria-label={selected?.name||'Live TV player'}/>
    {!selected&&<div className="tv-idle"><span className="tv-idle-symbol"><Radio size={30}/></span><h1>Your front-row seat.</h1><p>Choose a channel to watch live.</p><span className="tv-idle-tag">LIVE TV · MOROSHOW</span></div>}
@@ -80,7 +80,7 @@ export function LiveTvGuide(){
      <input className="tv-volume" aria-label="Volume" type="range" min="0" max="1" step="0.05" defaultValue="1" onChange={e=>{if(videoRef.current){videoRef.current.volume=Number(e.target.value);setMuted(Number(e.target.value)===0);}}}/>
      <span className="tv-live-line"><i/></span><span className="tv-live-caption">LIVE</span>
      {levels.length>1&&<select aria-label="Video quality" value={quality} onChange={e=>{const n=Number(e.target.value);setQuality(n);if(hlsRef.current)hlsRef.current.currentLevel=n;}}><option value={-1}>Auto</option>{levels.map(l=><option key={l.index} value={l.index}>{l.height?l.height+'p':'Stream '+(l.index+1)}</option>)}</select>}
-     <button aria-label="Fullscreen" onClick={()=>{if(videoRef.current&&frameRef.current)void enterShortsFullscreen(videoRef.current,frameRef.current,document,isIOSDevice(navigator)).catch(()=>setError('Fullscreen is unavailable on this device.'));}}><Maximize size={21}/></button>
+     <button aria-label="Fullscreen" onClick={()=>{if(roomRef.current){if(!document.fullscreenElement)void roomRef.current.requestFullscreen?.().catch(()=>setError('Fullscreen is unavailable on this device.'));else void document.exitFullscreen?.();}}}><Maximize size={21}/></button>
     </div></div>
    </div>}
   </div>
