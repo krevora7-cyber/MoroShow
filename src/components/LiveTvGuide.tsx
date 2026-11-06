@@ -12,7 +12,7 @@ const DEFAULT_GROUPS:Group[]=[{id:'all',name:'All channels'}];
 export function LiveTvGuide(){
  const {activeProfile,favorites,toggleFavorite}=useProfile();
  const [groups,setGroups]=useState(DEFAULT_GROUPS),[category,setCategory]=useState('all'),[search,setSearch]=useState(''),[query,setQuery]=useState(''),[channels,setChannels]=useState<Channel[]>([]),[cursor,setCursor]=useState<string|null>(null),[page,setPage]=useState(''),[loading,setLoading]=useState(true),[listError,setListError]=useState(''),[listRetry,setListRetry]=useState(0);
- const [sourceId,setSourceId]=useState(''),[activeSource,setActiveSource]=useState('');
+ const [sourceId,setSourceId]=useState(''),[activeSource,setActiveSource]=useState(''),[settingsOpen,setSettingsOpen]=useState(false);
  const [categorySearch,setCategorySearch]=useState('');
  const [drawer,setDrawer]=useState(true);const [sort,setSort]=useState('az');
  const [selected,setSelected]=useState<Channel|null>(null),[retry,setRetry]=useState(0),[connecting,setConnecting]=useState(false),[error,setError]=useState(''),[paused,setPaused]=useState(true),[muted,setMuted]=useState(false),[quality,setQuality]=useState(-1),[levels,setLevels]=useState<{height:number;index:number}[]>([]),[controls,setControls]=useState(true);
@@ -79,12 +79,12 @@ export function LiveTvGuide(){
      <button aria-label="Channels" onClick={()=>setDrawer(d=>!d)}><List size={21}/></button>
      <input className="tv-volume" aria-label="Volume" type="range" min="0" max="1" step="0.05" defaultValue="1" onChange={e=>{if(videoRef.current){videoRef.current.volume=Number(e.target.value);setMuted(Number(e.target.value)===0);}}}/>
      <span className="tv-live-line"><i/></span><span className="tv-live-caption">LIVE</span>
-     {levels.length>1&&<select aria-label="Video quality" value={quality} onChange={e=>{const n=Number(e.target.value);setQuality(n);if(hlsRef.current)hlsRef.current.currentLevel=n;}}><option value={-1}>Auto</option>{levels.map(l=><option key={l.index} value={l.index}>{l.height?l.height+'p':'Stream '+(l.index+1)}</option>)}</select>}
+     
      <button aria-label="Fullscreen" onClick={()=>{if(roomRef.current){if(!document.fullscreenElement)void roomRef.current.requestFullscreen?.().catch(()=>setError('Fullscreen is unavailable on this device.'));else void document.exitFullscreen?.();}}}><Maximize size={21}/></button>
     </div></div>
    </div>}
   </div>
-  {selected&&<nav className="tv-sources" aria-label="Channel sources">{selected.sources?.map(source=><button key={source.id} aria-pressed={activeSource===source.id} onClick={()=>chooseSource(source.id)}>{source.label}</button>)}</nav>}
+  {selected&&<div className="tv-source-tools"><nav className="tv-sources" aria-label="Channel sources">{selected.sources?.map((source,index)=><button key={source.id} aria-pressed={activeSource===source.id} onClick={()=>chooseSource(source.id)}>Source {index+1}</button>)}</nav><div className="tv-settings-wrap"><button className="tv-source-settings" aria-label="Playback settings" aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(v=>!v)}><Settings size={17}/><span>Settings</span></button>{settingsOpen&&<div className="tv-settings-menu"><label htmlFor="tv-quality">Video quality</label><select id="tv-quality" aria-label="Video quality" value={quality} onChange={e=>{const n=Number(e.target.value);setQuality(n);if(hlsRef.current)hlsRef.current.currentLevel=n;}}><option value={-1}>Auto</option>{levels.map(l=><option key={l.index} value={l.index}>{l.height?l.height+'p':'Stream '+(l.index+1)}</option>)}</select></div>}</div></div>}
   {!drawer&&<button className="tv-open-guide" aria-label="Open channel guide" onClick={()=>setDrawer(true)}><List size={20}/> Channels</button>}
   <div className="tv-browser" hidden={!drawer}>
    <div className="tv-guide-heading"><strong>Channels</strong><button aria-label="Close channel guide" onClick={()=>setDrawer(false)}><X size={20}/></button></div>
