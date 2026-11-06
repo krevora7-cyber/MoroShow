@@ -4,7 +4,6 @@ import Hls from 'hls.js';
 import {Search,Heart,Play,Pause,Volume2,VolumeX,Maximize,RotateCw,Radio,ChevronDown,ChevronUp,List,X,LoaderCircle} from 'lucide-react';
 import {useProfile} from '../context/ProfileContext';
 import {apiFetch,resolveMediaUrl} from '../player/netshowApi';
-import {enterShortsFullscreen,isIOSDevice} from '../player/shortsPresentation';
 import './LiveTvGuide.css';
 type Channel={sources?:{id:string;label:string}[];id:string;name:string;category:string;logoUrl?:string;epg?:{title:string;start:string;end:string}[]};
 type Group={id:string;name:string;badge?:string;count?:number};
