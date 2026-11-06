@@ -3,6 +3,7 @@ import {useEffect,useRef,useState} from 'react';
 import Hls from 'hls.js';
 import {Search,Heart,Play,Pause,Volume2,VolumeX,Maximize,RotateCw,Radio,ChevronDown,ChevronUp,List,X,LoaderCircle} from 'lucide-react';
 import {useProfile} from '../context/ProfileContext';
+import {isIOSDevice} from '../player/shortsPresentation';
 import {apiFetch,resolveMediaUrl} from '../player/netshowApi';
 import './LiveTvGuide.css';
 type Channel={sources?:{id:string;label:string}[];id:string;name:string;category:string;logoUrl?:string;epg?:{title:string;start:string;end:string}[]};
