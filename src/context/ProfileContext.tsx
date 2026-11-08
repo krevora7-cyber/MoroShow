@@ -41,10 +41,11 @@ const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const account=useAccount();
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [activeProfile, setActiveProfile] = useState<Profile | null>(()=>supabase&&!account?{id:'moro-guest',name:'Guest',avatar:'disney_01',isKid:false,hasPin:false,createdAt:0}:null);
+  const guest: Profile = {id:'moro-guest',name:'Guest',avatar:'disney_01',isKid:false,hasPin:false,createdAt:0};
+  const [profiles, setProfiles] = useState<Profile[]>(()=>supabase&&!account?[guest]:[]);
+  const [activeProfile, setActiveProfile] = useState<Profile | null>(null);
   const [pendingProfile, setPendingProfile] = useState<Profile | null>(null);
-  const [isWhoIsWatchingOpen, setIsWhoIsWatchingOpen] = useState(false);
+  const [isWhoIsWatchingOpen, setIsWhoIsWatchingOpen] = useState(true);
   const [isPinModalOpen, setIsPinModalOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   const [history, setHistory] = useState<WatchHistoryItem[]>([]);
@@ -56,7 +57,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
   const refreshProfiles = async () => {
     setConnectionError(null);
     try {
-      const res = await apiFetch('/api/profiles',{signal:AbortSignal.timeout(15000)});
+      const res = await apiFetch('/api/profiles',{signal:AbortSignal.timeout(45000)});
       if(!res.ok)throw new Error('Profile service unavailable');
       const data = await res.json();
       if(supabase&&!account&&data.guest!==true)throw new Error('Guest browsing needs the updated backend.');
@@ -65,7 +66,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
         setProfiles(data.profiles);
         if(!data.profiles.length)throw new Error('No profiles returned');
 
-        if(data.guest===true&&data.profiles[0]?.id==='moro-guest'){setActiveProfile(data.profiles[0]);setIsWhoIsWatchingOpen(false);}else{setIsWhoIsWatchingOpen(true);}
+        // Initial profile selection is shown immediately; refreshing profiles must not interrupt a selected session.
       }
     } catch (e) {
       setConnectionError('The server is taking longer to respond. Please retry in a moment.');
@@ -81,7 +82,11 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
   const currentProfileId=useRef(activeProfile?.id);currentProfileId.current=activeProfile?.id;
   // Fetch history and favorites when activeProfile changes
   const refreshHistory = async () => {
-    if (!activeProfile || isGuestProfile(activeProfile.id)) return;
+    if (!activeProfile) return;
+    if (isGuestProfile(activeProfile.id)) {
+      try { setHistory(JSON.parse(localStorage.getItem('moroshow-guest-history') || '[]')); } catch { setHistory([]); }
+      return;
+    }
     try {
       const [histRes, favRes] = await Promise.all([
         apiFetch(`/api/profiles/${activeProfile.id}/history`),
@@ -230,7 +235,12 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
   const isFavorite = (contentId: string) => favorites.includes(contentId);
 
   const recordHistory = async (item: Partial<WatchHistoryItem> & { contentId: string; currentTime: number; duration: number }) => {
-    if (!activeProfile||isGuestProfile(activeProfile.id)) return;
+    if (!activeProfile) return;
+    if (isGuestProfile(activeProfile.id)) {
+      const saved: WatchHistoryItem = {contentId:item.contentId,name:item.name || 'Media',streamUrl:'',streamType:item.streamType || 'hls',kind:item.kind || 'movie',category:item.category || 'General',posterUrl:item.posterUrl,currentTime:item.currentTime,duration:item.duration,progressPercent:item.duration>0?Math.min(100,Math.round(item.currentTime/item.duration*100)):0,updatedAt:Date.now()};
+      setHistory(prev => {const next=[saved,...prev.filter(h=>h.contentId!==item.contentId)].slice(0,100);try{localStorage.setItem('moroshow-guest-history',JSON.stringify(next));}catch{}return next;});
+      return;
+    }
     try {
       const saved = await apiFetch(`/api/profiles/${activeProfile.id}/history`, {
         method: 'POST',

@@ -1,4 +1,5 @@
 import React from 'react';
+import {isGuestProfile,requestSignIn} from '../auth/guest';
 import { useProfile } from '../context/ProfileContext';
 import { useCatalog } from '../context/CatalogContext';
 import { AVATAR_OPTIONS, Profile } from '../types';
@@ -12,7 +13,9 @@ export const WhoIsWatching: React.FC = () => {
     return AVATAR_OPTIONS.find(a => a.id === avatarId) || AVATAR_OPTIONS[0];
   };
 
+  const guestOnly=profiles.length===1&&isGuestProfile(profiles[0]?.id);
   const handleCreateNew = () => {
+    if(guestOnly){requestSignIn();return;}
     setEditingProfileId(null);
     setIsProfileEditOpen(true);
   };
@@ -36,7 +39,7 @@ export const WhoIsWatching: React.FC = () => {
           Who's Watching?
         </h1>
         <p className="text-neutral-400 text-sm md:text-base max-w-md mx-auto mb-10">
-          Select your profile to access your movies, series, and saved titles.
+          Select your profile to access your movies, series, and saved titles. Guest progress is saved on this device when supported by the player.
         </p>
 
         {/* Profile Grid */}
@@ -93,14 +96,14 @@ export const WhoIsWatching: React.FC = () => {
                 </div>
 
                 {/* Edit small button */}
-                <button
+                {!isGuestProfile(profile.id)&&<button
                   type="button"
                   aria-label={`Edit ${profile.name}`}
                   onClick={(e) => handleEditProfile(e, profile.id)}
                   className="mt-1 text-xs text-neutral-500 hover:text-neutral-300 underline underline-offset-2 opacity-100 transition-opacity"
                 >
                   Edit
-                </button>
+                </button>}
               </div>
             );
           })}
@@ -117,7 +120,7 @@ export const WhoIsWatching: React.FC = () => {
               <Plus className="w-10 h-10 text-neutral-500 group-hover:text-neutral-300 transition-colors" />
             </div>
             <span className="mt-3 text-neutral-400 font-medium text-base md:text-lg group-hover:text-white transition-colors">
-              Add Profile
+              {guestOnly?'Sign in':'Add Profile'}
             </span>
             <span className="text-xs text-transparent select-none mt-1">.</span>
           </div>
