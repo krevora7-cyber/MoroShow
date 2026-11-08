@@ -1,42 +1,45 @@
-import {useCallback,useEffect,useState} from 'react';
-import {CalendarClock,ChevronLeft,ExternalLink,RefreshCw,Trophy} from 'lucide-react';
+import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
+import {Capacitor,registerPlugin} from '@capacitor/core';
+import {ArrowLeft,CalendarDays,ChevronRight,Clock3,Play,Radio,RefreshCw} from 'lucide-react';
 import {decodeMatchFeed} from '../events/decodeMatchFeed';
+import './EventsPage.css';
 
 type Team={name?:string;name_ar?:string;logo?:string;score?:number|null};
-type Match={id:number;date?:string;time?:string;status?:number;active?:number;has_channels?:number;home?:Team;away?:Team;league?:{name?:string;name_ar?:string};live_domain?:string};
-type MatchFeed={matches?:Match[];live_domain?:string};
-const API='https://cdn.kora-api.org/api/v1/matches';
+type Match={id:number;date?:string;time?:string;status?:number;active?:number;has_channels?:number;home?:Team;away?:Team;league?:{name?:string;name_ar?:string}};
+type Channel={type?:string;link?:string;ch?:string;server_name?:string};
+type Source={url:string;label:string};
+const player=registerPlugin<{open(options:{url:string;title:string}):Promise<{closed:boolean}>}>('MoroEventPlayer');
+const API='https://cdn.kora-api.org/api/v1/';
 const asset=(p?:string)=>p&&/^uploads\/[a-zA-Z0-9_./-]+$/.test(p)?`https://cdn.kora-api.org/${p}`:undefined;
 const name=(t?:Team)=>t?.name_ar||t?.name||'—';
-const status=(m:Match)=>Number(m.status)===1||Number(m.status)===3?'LIVE':Number(m.status)===2?'Finished':'Upcoming';
-const rank=(m:Match)=>status(m)==='LIVE'?0:status(m)==='Upcoming'?1:2;
-function watchUrl(m:Match,domain?:string){
- if(Number(m.active)!==1||Number(m.has_channels)!==1||!Number.isSafeInteger(Number(m.id)))return '';
- const host=(m.live_domain||domain||'').toLowerCase().replace(/^https?:\/\//,'').split('/')[0];
- // The specified source uses robotiva.online. Do not embed arbitrary hosts from the feed.
- if(host!=='robotiva.online')return '';
- return `https://robotiva.online/kora.html?m=${encodeURIComponent(m.id)}&ref=yacinews.com`;
+const status=(m:Match)=>Number(m.status)===1||Number(m.status)===3?'Live':Number(m.status)===2?'Finished':'Upcoming';
+const rank=(m:Match)=>status(m)==='Live'?0:status(m)==='Upcoming'?1:2;
+const matchTime=(m:Match)=>{if(!m.date||!m.time)return m.time||'Time unavailable';const value=new Date(`${m.date}T${m.time.length===5?m.time+':00':m.time}Z`);return Number.isNaN(value.getTime())?m.time:value.toLocaleString(undefined,{hour:'2-digit',minute:'2-digit',day:'numeric',month:'short'});};
+function makeSource(c:Channel,index:number):Source|null {
+ let url=''; const type=(c.type||'').toLowerCase();
+ if(type==='custom'&&c.ch&&/^[a-z0-9_-]{1,80}$/i.test(c.ch)) url=`https://goo4goalz.com/ch.html?ch=${encodeURIComponent(c.ch)}`;
+ else if(type==='frame'&&c.link) {
+  try {const u=new URL(c.link);const allowed=(u.hostname==='goo4goalz.com'&&u.pathname==='/ch.html')||(u.hostname==='redirectus.net'&&['/streame.html','/streamlat.html'].includes(u.pathname));if(u.protocol==='https:'&&!u.username&&!u.password&&(!u.port||u.port==='443')&&allowed)url=u.href;}catch{/* Invalid source is ignored. */}
+ }
+ if(!url)return null;
+ const label=(c.server_name||'').trim().slice(0,48); return {url,label:label&&!/yacine/i.test(label)?label:`Source ${index+1}`};
 }
 export default function EventsPage(){
- const [matches,setMatches]=useState<Match[]>([]),[domain,setDomain]=useState(''),[loading,setLoading]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState<Match|null>(null);
- const load=useCallback(async(signal?:AbortSignal)=>{
-  try{
-   const response=await fetch(API,{signal,headers:{Accept:'application/json'}});
-   if(!response.ok)throw new Error('Events source is unavailable.');
-   const feed:MatchFeed|Match[]=await decodeMatchFeed(await response.text());
-   if(signal?.aborted)return;
-   const list=Array.isArray(feed)?feed:feed.matches;
-   if(!Array.isArray(list))throw new Error('Events source returned an unexpected format.');
-   setMatches(list.slice().sort((a,b)=>rank(a)-rank(b)));setDomain(Array.isArray(feed)?'':feed.live_domain||'');setError('');
-  }catch(e:any){if(!signal?.aborted)setError(e?.message||'Unable to load events.');}
-  finally{if(!signal?.aborted)setLoading(false);}
- },[]);
- useEffect(()=>{const controller=new AbortController();void load(controller.signal);const timer=setInterval(()=>{if(!document.hidden)void load(controller.signal)},60000);return()=>{controller.abort();clearInterval(timer);};},[load]);
- const url=selected?watchUrl(selected,domain):'';
- return <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12 space-y-6 text-white" aria-label="Events">
-  <div className="flex flex-wrap items-center justify-between gap-4"><div className="flex items-center gap-4"><div className="rounded-2xl bg-red-600/15 p-3 text-red-500"><Trophy size={28}/></div><div><p className="text-xs text-red-500 font-bold uppercase tracking-widest">MoroShow Sport</p><h1 className="text-3xl sm:text-4xl font-extrabold">Events</h1><p className="text-zinc-400 text-sm mt-2">Match listings from Yacinews</p></div></div><button className="rounded-xl border border-zinc-700 px-4 py-2 flex items-center gap-2" onClick={()=>{setLoading(true);void load();}}><RefreshCw size={16}/>Refresh</button></div>
-  {selected&&url&&<section className="space-y-3" aria-label="Selected event"><div className="flex flex-wrap items-center justify-between gap-3"><button className="flex items-center gap-2" onClick={()=>setSelected(null)}><ChevronLeft size={18}/>All events</button><a href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-zinc-300">Open source <ExternalLink size={14}/></a></div><h2 className="text-xl font-bold">{name(selected.home)} — {name(selected.away)}</h2><div className="w-full aspect-video bg-black rounded-2xl overflow-hidden"><iframe key={url} src={url} title={`${name(selected.home)} vs ${name(selected.away)}`} className="w-full h-full" allow="autoplay; fullscreen; picture-in-picture" allowFullScreen sandbox="allow-scripts allow-same-origin allow-presentation" referrerPolicy="strict-origin-when-cross-origin"/></div><p className="text-xs text-zinc-400">Playback is provided by a third-party site and may be unavailable.</p></section>}
-  {error&&<div className="rounded-xl border border-red-800 bg-red-950/40 p-4" role="alert">{error}</div>}
-  {loading&&!matches.length?<p role="status" className="text-zinc-400">Loading events…</p>:!matches.length&&!error?<div className="rounded-2xl border border-zinc-800 p-10 text-center text-zinc-400"><CalendarClock className="mx-auto mb-3"/>No events available right now.</div>:<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">{matches.map(m=>{const link=watchUrl(m,domain),live=status(m);return <button key={m.id} disabled={!link} onClick={()=>{setSelected(m);window.scrollTo({top:0,behavior:'smooth'});}} className="text-left rounded-2xl border border-zinc-800 bg-zinc-900/70 p-5 space-y-4 disabled:opacity-60 enabled:hover:border-red-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-red-500"><div className="flex items-center justify-between gap-2 text-xs text-zinc-400"><span>{m.league?.name_ar||m.league?.name||'Sport'}</span><span className={live==='LIVE'?'text-red-400 font-bold':'text-zinc-400'}>{live}</span></div><div className="flex items-center justify-between gap-3"><div className="flex items-center gap-2 min-w-0">{asset(m.home?.logo)&&<img src={asset(m.home?.logo)} alt="" className="w-9 h-9 object-contain" loading="lazy"/>}<strong>{name(m.home)}</strong></div><span className="font-bold whitespace-nowrap">{m.home?.score!=null&&m.away?.score!=null?`${m.home.score} – ${m.away.score}`:(m.time||'vs')}</span><div className="flex items-center gap-2 min-w-0 text-right"><strong>{name(m.away)}</strong>{asset(m.away?.logo)&&<img src={asset(m.away?.logo)} alt="" className="w-9 h-9 object-contain" loading="lazy"/>}</div></div><p className="text-xs text-zinc-400">{m.date||''} {link?' · Watch event':' · No stream available'}</p></button>})}</div>}
+ const [matches,setMatches]=useState<Match[]>([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[selected,setSelected]=useState<Match|null>(null);
+ const [sources,setSources]=useState<Source[]>([]),[detailLoading,setDetailLoading]=useState(false),[playbackError,setPlaybackError]=useState(''),[opening,setOpening]=useState(false);
+ const panel=useRef<HTMLElement>(null);
+ const load=useCallback(async(signal?:AbortSignal)=>{try{const response=await fetch(API+'matches',{signal,headers:{Accept:'application/json'}});if(!response.ok)throw new Error('Events are temporarily unavailable.');const feed:{matches?:Match[]}|Match[]=await decodeMatchFeed(await response.text());if(signal?.aborted)return;const list=Array.isArray(feed)?feed:feed.matches;if(!Array.isArray(list))throw new Error('Events are temporarily unavailable.');setMatches(list.slice().sort((a,b)=>rank(a)-rank(b)));setError('');}catch(e:unknown){if(!signal?.aborted)setError(e instanceof Error?e.message:'Unable to load events.');}finally{if(!signal?.aborted)setLoading(false);}},[]);
+ useEffect(()=>{const c=new AbortController();void load(c.signal);const timer=setInterval(()=>{if(!document.hidden)void load(c.signal);},60000);return()=>{c.abort();clearInterval(timer);};},[load]);
+ useEffect(()=>{if(!selected)return;const c=new AbortController();setSources([]);setPlaybackError('');setDetailLoading(true);(async()=>{try{const r=await fetch(`${API}matche/${encodeURIComponent(selected.id)}`,{signal:c.signal,headers:{Accept:'application/json'}});if(!r.ok)throw new Error('Could not load this event.');const d:{match?:{channels?:Channel[]};channels?:Channel[]}=await decodeMatchFeed(await r.text());if(c.signal.aborted)return;const channels=d.match?.channels||d.channels||[];if(!Array.isArray(channels))throw new Error('Sources are temporarily unavailable.');const found=channels.map(makeSource).filter((s):s is Source=>!!s);const unique=found.filter((s,i)=>found.findIndex(x=>x.url===s.url)===i);setSources(unique);if(!unique.length)setPlaybackError('No compatible sources are available for this event.');}catch(e:unknown){if(!c.signal.aborted)setPlaybackError(e instanceof Error?e.message:'Could not load this event.');}finally{if(!c.signal.aborted)setDetailLoading(false);}})();return()=>c.abort();},[selected?.id]);
+ const open=async(source:Source)=>{if(!selected||opening)return;setPlaybackError('');if(!Capacitor.isNativePlatform()||Capacitor.getPlatform()!=='android'){setPlaybackError('Open this event in the MoroShow Android app.');return;}setOpening(true);try{await player.open({url:source.url,title:`${name(selected.home)}  vs  ${name(selected.away)}`});}catch(e:unknown){setPlaybackError(e instanceof Error?e.message:'Unable to open this source. Try another one.');}finally{setOpening(false);}};
+ const liveCount=useMemo(()=>matches.filter(m=>status(m)==='Live').length,[matches]);
+ const pick=(m:Match)=>{setSelected(m);window.setTimeout(()=>panel.current?.scrollIntoView({behavior:'smooth',block:'start'}),0);};
+ const image=(team?:Team)=>asset(team?.logo)?<img src={asset(team?.logo)} alt="" loading="lazy"/>:<span aria-hidden="true">—</span>;
+ return <section className="ms-events" aria-label="Events">
+  <header className="ms-events-header"><div><p className="ms-events-kicker"><span/> MOROSHOW SPORT</p><h1>Events</h1><p>Live moments, all in one place.</p></div><button className="ms-events-refresh" aria-label="Refresh events" onClick={()=>{setLoading(true);void load();}}><RefreshCw size={17} className={loading?'ms-events-spin':''}/><span>Refresh</span></button></header>
+  {selected&&<section className="ms-events-player" ref={panel} aria-label="Selected event"><div className="ms-events-player-top"><button className="ms-events-back" onClick={()=>setSelected(null)}><ArrowLeft size={18}/> All events</button><span className={'ms-events-status '+(status(selected)==='Live'?'is-live':'')}>{status(selected)}</span></div><div className="ms-events-match-heading"><div><p>{selected.league?.name_ar||selected.league?.name||'Sport'}</p><h2 dir="auto">{name(selected.home)} <span>vs</span> {name(selected.away)}</h2></div><span className="ms-events-player-time"><Clock3 size={15}/> {matchTime(selected)}</span></div><div className="ms-source-intro"><span className="ms-events-video-icon"><Radio size={25}/></span><div><strong>Choose a source</strong><p>Open a source to watch this event. Availability can change.</p></div></div>{detailLoading?<p className="ms-events-loading" role="status">Finding sources…</p>:sources.length>0?<div className="ms-source-list">{sources.map((s,i)=><button className="ms-source-button" key={s.url} disabled={opening} onClick={()=>void open(s)}><span className="ms-source-play"><Play size={16} fill="currentColor"/></span><span className="ms-source-copy"><strong>{s.label}</strong><small>Source {i+1}</small></span><ChevronRight size={18}/></button>)}</div>:null}{opening&&<p className="ms-events-loading" role="status">Player open</p>}{playbackError&&<p className="ms-events-error" role="alert">{playbackError}</p>}<p className="ms-source-note">Sources are provided by third parties and may include their own controls or advertising.</p></section>}
+  <div className="ms-events-section-title"><div><p className="ms-events-kicker">MATCH CENTRE</p><h2>Today’s events</h2></div><span className="ms-events-count"><i/> {liveCount} live</span></div>
+  {error&&<p className="ms-events-error" role="alert">{error}</p>}
+  {loading&&!matches.length?<p className="ms-events-empty" role="status">Loading events…</p>:!matches.length&&!error?<div className="ms-events-empty"><CalendarDays size={24}/><strong>No events right now</strong><span>Check back later for new matches.</span></div>:<div className="ms-events-grid">{matches.map(m=>{const state=status(m),available=Number(m.active)===1&&Number(m.has_channels)===1;return <button className="ms-event-card" key={m.id} disabled={!available} onClick={()=>pick(m)} aria-label={`${name(m.home)} vs ${name(m.away)}${available?', view event':''}`}><div className="ms-event-card-top"><span className="ms-event-league">{m.league?.name_ar||m.league?.name||'Sport'}</span><span className={'ms-events-status '+(state==='Live'?'is-live':'')}>{state}</span></div><div className="ms-event-teams"><div className="ms-event-team">{image(m.home)}<strong dir="auto">{name(m.home)}</strong></div><div className="ms-event-score">{m.home?.score!=null&&m.away?.score!=null?<strong>{m.home.score}<span>:</span>{m.away.score}</strong>:<strong>VS</strong>}<small>{matchTime(m)}</small></div><div className="ms-event-team">{image(m.away)}<strong dir="auto">{name(m.away)}</strong></div></div><div className="ms-event-footer"><span>{available?<><Play size={14} fill="currentColor"/> View event</>:<><Clock3 size={14}/> Not available</>}</span><ChevronRight size={16}/></div></button>})}</div>}
  </section>;
 }
