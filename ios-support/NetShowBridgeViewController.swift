@@ -7,5 +7,6 @@ class NetShowBridgeViewController: CAPBridgeViewController {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(NetShowNativePlayerPlugin())
         bridge?.registerPluginInstance(MoroProtectedPlayerPlugin())
+        bridge?.registerPluginInstance(MoroEventPlayerPlugin())
     }
 }

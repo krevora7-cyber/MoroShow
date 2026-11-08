@@ -9,6 +9,10 @@ if ! command -v xcodebuild >/dev/null; then
   echo 'Install Xcode and command-line tools before building an iPhone app.' >&2
   exit 1
 fi
+if ! command -v pod >/dev/null; then
+  echo 'CocoaPods is required. Install CocoaPods before preparing iOS.' >&2
+  exit 1
+fi
 if [[ -z "${VITE_NETSHOW_API_BASE:-}" || "${VITE_NETSHOW_API_BASE}" != https://* ]]; then
   echo 'Set VITE_NETSHOW_API_BASE to your deployed HTTPS MoroShow backend before building iOS.' >&2
   echo 'This is the app API origin, NOT a provider account URL.' >&2
@@ -37,6 +41,7 @@ if splash.exists():
         shutil.copyfile('assets/splash.png', image)
 ICON_PY
 cp ios-support/MoroProtectedPlayerPlugin.swift ios/App/App/
+cp ios-support/MoroEventPlayerPlugin.swift ios/App/App/
 cp ios-support/NetShowNativePlayerPlugin.swift ios/App/App/
 cp ios-support/NetShowBridgeViewController.swift ios/App/App/
 # Capacitor 7/8 template: replace storyboard class with the app-local plugin host.
@@ -54,6 +59,7 @@ if 'customClass="NetShowBridgeViewController"' not in s:
         raise SystemExit('Storyboard template changed; set the initial ViewController class to NetShowBridgeViewController in Xcode.')
     p.write_text(s)
 PY
+node scripts/register-ios-files.mjs
 echo 'Open ios/App/App.xcworkspace (or App.xcodeproj for SwiftPM) in Xcode.'
-echo 'Check that all three Swift source files belong to the App target (Target Membership).'
+echo 'The four Swift source files are registered in the App target.'
 echo 'Choose an Apple Development team, connect iPhone, then Run.'

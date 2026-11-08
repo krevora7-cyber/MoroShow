@@ -3,8 +3,8 @@ import WebKit
 import AVFoundation
 import Capacitor
 
-private let playerHosts:Set<String>=["player.cinezo.live","vidsrc.mov","vidlink.pro","vidsrc.sh"]
-private let reservedHosts=["cinezo.live","vidsrc.mov","vidlink.pro","vidsrc.sh","dramatip.net","vercel.app","supabase.co","themoviedb.org","tmdb.org","trycloudflare.com","localhost"]
+private let playerHosts:Set<String>=["cinesrc.st","player.cinezo.live","vidsrc.mov","vidlink.pro","vidsrc.sh"]
+private let reservedHosts=["cinesrc.st","cinezo.live","vidsrc.mov","vidlink.pro","vidsrc.sh","dramatip.net","vercel.app","supabase.co","themoviedb.org","tmdb.org","trycloudflare.com","localhost"]
 private func allowedPlayer(_ url:URL)->Bool { url.scheme?.lowercased()=="https" && url.user==nil && url.password==nil && (url.port==nil || url.port==443) && playerHosts.contains(url.host?.lowercased() ?? "") }
 private final class ProtectedPlayerScreen:UIViewController,WKNavigationDelegate,WKUIDelegate {
  var sources:[(String,URL)]=[];var selected=0;var ruleList:WKContentRuleList?;var onClose:(()->Void)?
