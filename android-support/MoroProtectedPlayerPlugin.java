@@ -2,6 +2,8 @@ package com.netshow.app;
 import android.app.Dialog;
 import android.graphics.Color;
 import android.os.Message;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.*;
 import android.webkit.*;
 import android.widget.*;
@@ -13,13 +15,13 @@ import java.util.*;
 
 @CapacitorPlugin(name="MoroProtectedPlayer")
 public class MoroProtectedPlayerPlugin extends Plugin {
- private Dialog dialog;private WebView player;private PluginCall pending;private View customView;private WebChromeClient.CustomViewCallback fullscreenCallback;private FrameLayout videoContainer;
+ private Dialog dialog;private WebView player;private PluginCall pending;private final Handler progressHandler=new Handler(Looper.getMainLooper());private Runnable progressPoll;private double lastTime=0,lastDuration=0;private View customView;private WebChromeClient.CustomViewCallback fullscreenCallback;private FrameLayout videoContainer;
  @PluginMethod public void open(PluginCall call){
   JSArray sources=call.getArray("sources"),hosts=call.getArray("blockedHosts");final List<String> urls=new ArrayList<>(),labels=new ArrayList<>(),rules=new ArrayList<>();final PlaybackPolicy policy;
   try{if(sources==null||sources.length()==0||sources.length()>4||hosts==null)throw new Exception("Missing playback options");for(int i=0;i<sources.length();i++){JSONObject source=sources.getJSONObject(i);String url=source.getString("url");if(!PlaybackPolicy.allowedPage(url))throw new Exception("Unsupported player address");urls.add(url);labels.add(source.optString("label","Server "+(i+1)));}for(int i=0;i<hosts.length();i++)rules.add(hosts.getString(i));policy=new PlaybackPolicy(rules);}catch(Exception e){call.reject(e.getMessage());return;}
   final boolean filtering=call.getBoolean("protectionEnabled",true);
   getActivity().runOnUiThread(()->{
-   if(dialog!=null){call.reject("Close the current player first");return;}pending=call;dialog=new Dialog(getActivity(),android.R.style.Theme_Material_NoActionBar);
+   if(dialog!=null){call.reject("Close the current player first");return;}pending=call;lastTime=0;lastDuration=0;dialog=new Dialog(getActivity(),android.R.style.Theme_Material_NoActionBar);
    LinearLayout layout=new LinearLayout(getActivity());layout.setOrientation(LinearLayout.VERTICAL);layout.setBackgroundColor(Color.BLACK);
    LinearLayout toolbar=new LinearLayout(getActivity());toolbar.setGravity(Gravity.CENTER_VERTICAL);
    Button close=new Button(getActivity());close.setText("Back");close.setOnClickListener(v->dismiss());toolbar.addView(close);
@@ -41,12 +43,25 @@ public class MoroProtectedPlayerPlugin extends Plugin {
    for(int i=0;i<urls.size();i++){final String url=urls.get(i);Button button=new Button(getActivity());button.setText(labels.get(i));button.setOnClickListener(v->{leaveFullscreen();player.stopLoading();player.loadUrl(url);title.setText(call.getString("title","MoroShow"));});switches.addView(button);}
    layout.addView(scroller);videoContainer=new FrameLayout(getActivity());videoContainer.addView(player,new FrameLayout.LayoutParams(-1,-1));layout.addView(videoContainer,new LinearLayout.LayoutParams(-1,0,1));dialog.setContentView(layout);dialog.setOnDismissListener(d->cleanUp());
    dialog.setOnKeyListener((d,key,event)->{if(key==KeyEvent.KEYCODE_BACK&&event.getAction()==KeyEvent.ACTION_UP){if(customView!=null)leaveFullscreen();else dismiss();return true;}return false;});
-   dialog.show();dialog.getWindow().setLayout(-1,-1);dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);player.loadUrl(urls.get(Math.max(0,Math.min(call.getInt("selected",0),urls.size()-1))));close.requestFocus();
+   dialog.show();dialog.getWindow().setLayout(-1,-1);dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);player.loadUrl(urls.get(Math.max(0,Math.min(call.getInt("selected",0),urls.size()-1))));close.requestFocus();startProgressPolling();
   });
+ }
+ private void startProgressPolling(){
+  progressPoll=new Runnable(){public void run(){
+   if(player==null||dialog==null)return;
+   WebView current=player;String url=current.getUrl();
+   // Read only a top-level video on the explicitly approved provider; no JS bridge is exposed.
+   if(url!=null&&url.startsWith("https://cinesrc.st/")&&PlaybackPolicy.allowedPage(url)){
+    current.evaluateJavascript("(()=>{let v=document.querySelector('video');if(!v||v.paused||!Number.isFinite(v.currentTime)||!Number.isFinite(v.duration)||v.duration<300)return null;return {time:v.currentTime,duration:v.duration}})()",value->{
+     try{if(player!=current||current.getUrl()==null||!current.getUrl().startsWith("https://cinesrc.st/"))return;JSONObject data=new JSONObject(value);double t=data.getDouble("time"),duration=data.getDouble("duration");if(t>1&&duration>=300&&duration<=86400&&t<=duration+5){lastTime=Math.min(t,duration);lastDuration=duration;}}catch(Exception ignored){}
+    });
+   }
+   progressHandler.postDelayed(this,5000);
+  }};progressHandler.post(progressPoll);
  }
  private void leaveFullscreen(){if(customView!=null){videoContainer.removeView(customView);customView=null;if(fullscreenCallback!=null)fullscreenCallback.onCustomViewHidden();fullscreenCallback=null;}}
  private void dismiss(){if(dialog!=null)dialog.dismiss();}
- private void cleanUp(){leaveFullscreen();if(player!=null){player.stopLoading();player.loadUrl("about:blank");videoContainer.removeView(player);player.destroy();player=null;}dialog=null;if(pending!=null){pending.resolve(new JSObject().put("closed",true));pending=null;}}
+ private void cleanUp(){if(progressPoll!=null){progressHandler.removeCallbacks(progressPoll);progressPoll=null;}leaveFullscreen();if(player!=null){player.stopLoading();player.loadUrl("about:blank");videoContainer.removeView(player);player.destroy();player=null;}dialog=null;if(pending!=null){pending.resolve(new JSObject().put("closed",true).put("currentTime",lastTime).put("duration",lastDuration));pending=null;}}
  @PluginMethod public void close(PluginCall call){getActivity().runOnUiThread(()->{dismiss();call.resolve();});}
  @Override protected void handleOnPause(){if(player!=null)player.onPause();}
  @Override protected void handleOnResume(){if(player!=null)player.onResume();}
