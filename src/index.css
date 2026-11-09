@@ -164,3 +164,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif}.m
 .iptv-vod-player{position:fixed;inset:0;z-index:1000;background:#000;color:white;display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 .iptv-vod-player header{display:flex;align-items:center;gap:16px;padding:12px 18px;flex-shrink:0;background:#17171b}.iptv-vod-player header strong{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.iptv-vod-player button{padding:12px;border-radius:8px}.iptv-vod-player button:focus-visible{outline:3px solid white;outline-offset:2px}
 .iptv-vod-screen{position:relative;flex:1;min-height:0}.iptv-vod-screen video{width:100%;height:100%;object-fit:contain;display:block}.iptv-volume{position:absolute;right:18px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;background:#111b;border-radius:30px;padding:8px}.iptv-volume input{writing-mode:vertical-lr;direction:rtl;height:110px;width:22px;accent-color:#fff}.iptv-vod-player nav{display:flex;justify-content:center;gap:12px;overflow:auto;flex-shrink:0;padding:10px}.iptv-vod-player nav button{white-space:nowrap;color:#aaa;background:#161616}.iptv-vod-player nav button[aria-pressed=true]{background:#eee;color:#111}.iptv-vod-player>p{padding:12px;text-align:center;margin:0}
+
+/* Cast and recommendations within the existing details sheet */
+.m-detail-cast,.m-detail-similar { margin-top: 32px; }
+.m-detail-cast h2,.m-detail-similar h2 {font-size: 20px;margin-bottom:16px;}
+.m-detail-cast-list {display:flex;gap:16px;overflow-x:auto;padding:0 0 10px;}
+.m-detail-person {flex:0 0 100px;display:flex;flex-direction:column;gap:5px;min-width:0;}
+.m-detail-person img,.m-detail-person-placeholder {width:100px;height:112px;object-fit:cover;border-radius:10px;background:#242426;}
+.m-detail-person strong {font-size:13px;line-height:1.25;}
+.m-detail-person span {font-size:12px;color:#a5a5aa;line-height:1.3;}
+.m-detail-similar-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:14px;}
+@media(max-width:640px){.m-detail-similar-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.m-detail-person{flex-basis:82px}.m-detail-person img,.m-detail-person-placeholder{width:82px;height:94px}}
