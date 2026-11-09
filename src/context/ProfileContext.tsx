@@ -81,7 +81,11 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
   const currentProfileId=useRef(activeProfile?.id);currentProfileId.current=activeProfile?.id;
   // Fetch history and favorites when activeProfile changes
   const refreshHistory = async () => {
-    if (!activeProfile || isGuestProfile(activeProfile.id)) return;
+    if (!activeProfile) return;
+    if (isGuestProfile(activeProfile.id)) {
+      try { const value=JSON.parse(localStorage.getItem('moroshow-guest-history') || '[]'); setHistory(Array.isArray(value)?value:[]); } catch { setHistory([]); }
+      return;
+    }
     try {
       const [histRes, favRes] = await Promise.all([
         apiFetch(`/api/profiles/${activeProfile.id}/history`),
@@ -230,7 +234,12 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
   const isFavorite = (contentId: string) => favorites.includes(contentId);
 
   const recordHistory = async (item: Partial<WatchHistoryItem> & { contentId: string; currentTime: number; duration: number }) => {
-    if (!activeProfile||isGuestProfile(activeProfile.id)) return;
+    if (!activeProfile) return;
+    if (isGuestProfile(activeProfile.id)) {
+      const saved: WatchHistoryItem = {contentId:item.contentId,name:item.name || 'Media',streamUrl:'',streamType:item.streamType || 'hls',kind:item.kind || 'movie',category:item.category || 'General',posterUrl:item.posterUrl,currentTime:item.currentTime,duration:item.duration,progressPercent:item.duration>0?Math.min(100,Math.round(item.currentTime/item.duration*100)):0,updatedAt:Date.now()};
+      setHistory(prev => {const next=[saved,...prev.filter(h=>h.contentId!==item.contentId)].slice(0,100);try{localStorage.setItem('moroshow-guest-history',JSON.stringify(next));}catch{}return next;});
+      return;
+    }
     try {
       const saved = await apiFetch(`/api/profiles/${activeProfile.id}/history`, {
         method: 'POST',

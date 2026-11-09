@@ -23,7 +23,7 @@ interface CatalogContextType {
   liveChannels: CatalogItem[];
   movies: CatalogItem[];
   series: CatalogItem[];
-  activeTab: 'live' | 'home' | 'clips' | 'search' | 'downloads' | 'anime' | 'movies' | 'series' | 'favorites';
+  activeTab: 'live' | 'home' | 'clips' | 'search' | 'downloads' | 'anime' | 'movies' | 'series' | 'favorites' | 'community';
   selectedCategory: string | null;
   searchQuery: string;
   isLoading: boolean;
@@ -38,7 +38,7 @@ interface CatalogContextType {
   isSettingsOpen: boolean;
   isProfileEditOpen: boolean;
   editingProfileId: string | null;
-  setActiveTab: (tab: 'live' | 'home' | 'clips' | 'search' | 'downloads' | 'anime' | 'movies' | 'series' | 'favorites') => void;
+  setActiveTab: (tab: 'live' | 'home' | 'clips' | 'search' | 'downloads' | 'anime' | 'movies' | 'series' | 'favorites' | 'community') => void;
   setSelectedCategory: (cat: string | null) => void;
   setSearchQuery: (q: string) => void;
   setSelectedSeries: (series: CatalogItem | null) => void;
@@ -66,7 +66,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [sourcePending, setSourcePending] = useState(true);
 
-  const [activeTab, setActiveTab] = useState<'live' | 'home' | 'clips' | 'search' | 'downloads' | 'anime' | 'movies' | 'series' | 'favorites'>('home');
+  const [activeTab, setActiveTab] = useState<'live' | 'home' | 'clips' | 'search' | 'downloads' | 'anime' | 'movies' | 'series' | 'favorites' | 'community'>('home');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -137,7 +137,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (!activeProfile) return;
     if(item.id.startsWith('iptv:')&&(!variantId||variantId==='vidlink'))variantId='auto';
     if(!variantId&&item.id.startsWith('drama:'))variantId='shorts';
-    if(!variantId&&item.id.startsWith('w32:')){variantId='cinesrc';setPendingPlayback(item);}
+    if(!variantId&&item.id.startsWith('w32:')){variantId='vidstuck';setPendingPlayback(item);}
     if(!variantId){setPlaybackError(null);setPendingPlayback(item);return;}
 
     playbackRequest.current?.abort();
