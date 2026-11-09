@@ -2,8 +2,8 @@ package com.netshow.app;
 import java.net.URI;
 import java.util.*;
 public final class PlaybackPolicy {
- private static final Set<String> PROVIDERS=new HashSet<>(Arrays.asList("player.cinezo.live","vidsrc.mov","vidlink.pro","vidsrc.sh"));
- private static final String[] RESERVED={"cinezo.live","vidsrc.mov","vidlink.pro","vidsrc.sh","dramatip.net","vercel.app","supabase.co","themoviedb.org","tmdb.org","trycloudflare.com","localhost"};
+ private static final Set<String> PROVIDERS=new HashSet<>(Arrays.asList("cinesrc.st","player.cinezo.live","vidsrc.mov","vidlink.pro","vidsrc.sh"));
+ private static final String[] RESERVED={"cinesrc.st","cinezo.live","vidsrc.mov","vidlink.pro","vidsrc.sh","dramatip.net","vercel.app","supabase.co","themoviedb.org","tmdb.org","trycloudflare.com","localhost"};
  private final Set<String> blocked=new HashSet<>();
  public PlaybackPolicy(Collection<String> hosts){
   if(hosts.size()>2000)throw new IllegalArgumentException("Too many blocking rules");
