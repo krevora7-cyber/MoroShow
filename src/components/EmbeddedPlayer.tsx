@@ -3,6 +3,7 @@ import {browserPlayback,type BrowserPlaybackMode} from '../player/browserPlaybac
 import {Capacitor} from '@capacitor/core';
 import {ProtectedEmbeddedPlayer} from './ProtectedEmbeddedPlayer';
 import {readEmbedProgress} from '../player/embedEvents';
+import {readVidstuckProgress} from '../player/vidstuckProgress';
 import {useProfile} from '../context/ProfileContext';
 import {useEffect,useState,useRef,useMemo} from 'react';
 import {ArrowLeft,RotateCw,Play} from 'lucide-react';
@@ -17,8 +18,8 @@ export function EmbeddedPlayer(){const {activePlayback,stopPlayback,startPlaybac
  const playerUrl=useMemo(()=>{if(!url||!activePlayback)return '';const h=history.find(h=>h.contentId===activePlayback.catalogItem.id);try{return embedStartUrl(url,activePlayback.resumeTime??(h&&h.progressPercent<95?h.currentTime:0));}catch{return '';}},[url,activePlayback?.catalogItem.id,activePlayback?.resumeTime,activePlayback?.tokenResponse.variantId,retry]);
  useEffect(()=>{setHelp(false);const t=setTimeout(()=>setHelp(true),18000);return()=>clearTimeout(t);},[url,retry]);
  useEffect(()=>{lastSaved.current=0;const listener=(e:MessageEvent)=>{
- if(!activePlayback||!url||mode==='protected'||e.source!==frame.current?.contentWindow)return;
- const progress=readEmbedProgress(e.origin,e.data,new URL(url).origin,activePlayback.catalogItem.id);if(!progress)return;
+ if(!activePlayback||!url||e.source!==frame.current?.contentWindow)return;
+ const expectedOrigin=new URL(url).origin;const progress=expectedOrigin==='https://vidstuck.cc'?readVidstuckProgress(e.origin,e.data,activePlayback.catalogItem.id):(mode!=='protected'?readEmbedProgress(e.origin,e.data,expectedOrigin,activePlayback.catalogItem.id):null);if(!progress)return;
  const i=activePlayback.catalogItem,{time,duration,event}=progress;
  if(Date.now()-lastSaved.current<5000&&!['pause','ended','seeked'].includes(event))return;lastSaved.current=Date.now();
  void recordHistory({contentId:i.id,name:i.name,kind:i.kind,category:i.category,posterUrl:i.logoUrl,streamUrl:'',streamType:'hls',currentTime:Math.min(time,duration),duration});

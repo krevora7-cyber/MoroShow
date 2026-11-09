@@ -1,0 +1,11 @@
+.m-detail-cast,.m-detail-similar { margin-top: 32px; }
+.m-detail-cast h2,.m-detail-similar h2 {font-size: 20px;margin-bottom:16px;}
+.m-detail-cast-list {display:flex;gap:16px;overflow-x:auto;padding:0 0 10px;}
+.m-detail-person {flex:0 0 100px;display:flex;flex-direction:column;gap:5px;min-width:0;}
+.m-detail-person img,.m-detail-person-placeholder {width:100px;height:112px;object-fit:cover;border-radius:10px;background:#242426;}
+.m-detail-person strong {font-size:13px;line-height:1.25;}
+.m-detail-person span {font-size:12px;color:#a5a5aa;line-height:1.3;}
+.m-detail-similar-grid {display:grid;grid-template-columns:repeat(auto-fill,minmax(135px,1fr));gap:14px;}
+@media(max-width:640px){.m-detail-similar-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.m-detail-person{flex-basis:82px}.m-detail-person img,.m-detail-person-placeholder{width:82px;height:94px}}
+
+.m-detail-person{cursor:pointer;text-align:left;color:inherit}.m-detail-person:hover img,.m-detail-person:focus-visible img{outline:2px solid #ed2939;outline-offset:3px}.m-detail-person-credits{margin:28px 0}.m-detail-person-credits p{color:#aaa;margin-bottom:16px}.m-detail-person-credits .m-secondary{padding:8px 16px}

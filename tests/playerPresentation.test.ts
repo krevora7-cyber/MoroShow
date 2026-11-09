@@ -24,6 +24,7 @@ test('Arabic cues stay active for custom overlay and switch to native fullscreen
 test('embed resume and iPhone alternatives retain selected media identity',()=>{
  assert.equal(embedStartUrl('https://vidlink.pro/tv/42/2/3',120.5),'https://vidlink.pro/tv/42/2/3?startAt=120');
  assert.equal(embedStartUrl('https://player.cinezo.live/embed/movie/42',120),'https://player.cinezo.live/embed/movie/42');
- const variants=[{id:'cinezo'},{id:'vidsrc-mov'},{id:'vidlink'},{id:'vidsrc-sh'}];assert.equal(orderEmbedVariants(variants,true)[0].id,'cinezo');assert.equal(variants[0].id,'cinezo');
+ assert.equal(embedStartUrl('https://vidstuck.cc/embed/tv/42/2/3',120.5),'https://vidstuck.cc/embed/tv/42/2/3?progress=120');
+ const variants=[{id:'cinezo'},{id:'vidsrc-mov'},{id:'vidlink'},{id:'vidsrc-sh'}];assert.equal(orderEmbedVariants(variants,true)[0].id,'vidlink');assert.equal(variants[0].id,'cinezo');
  assert.equal(needsPlayerWindow('https://player.cinezo.live/embed/movie/42',true),false);assert.equal(needsPlayerWindow('https://player.cinezo.live/embed/movie/42',false),false);assert.equal(needsPlayerWindow('https://vidlink.pro/movie/42',true),false);assert.equal(needsPlayerWindow('https://vidsrc.sh/embed/movie/42',true),false);
 });
