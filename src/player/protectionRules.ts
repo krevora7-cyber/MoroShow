@@ -1,6 +1,6 @@
 export const RULES_URL='https://moro-show.vercel.app/playback-blocklist.json';
 export const BUNDLED_RULES={version:1,hosts:['doubleclick.net','googlesyndication.com','googleadservices.com','adsterra.com','adsterra.net','popads.net','popcash.net','propellerads.com','onclickads.net','onclkds.com','exoclick.com','exosrv.com','trafficjunky.net','juicyads.com','adnxs.com','adskeeper.com','mgid.com','hilltopads.net','clickadu.com','clickaine.com']};
-const reserved=['cinesrc.st','cinezo.live','vidsrc.mov','vidlink.pro','vidsrc.sh','dramatip.net','vercel.app','supabase.co','themoviedb.org','tmdb.org','trycloudflare.com','localhost'];
+const reserved=['cinesrc.st','mapple.fun','vidup.to','cinezo.live','vidsrc.mov','vidlink.pro','vidsrc.sh','dramatip.net','vercel.app','supabase.co','themoviedb.org','tmdb.org','trycloudflare.com','localhost'];
 export type ProtectionRules={version:number;hosts:string[]};
 export function validateRules(value:unknown):ProtectionRules|null{
  const x=value as ProtectionRules;if(!x||!Number.isSafeInteger(x.version)||x.version<1||!Array.isArray(x.hosts)||!x.hosts.length||x.hosts.length>2000)return null;

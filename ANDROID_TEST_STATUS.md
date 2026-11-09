@@ -1,0 +1,11 @@
+# MoroShow Android test build (1.2)
+
+This branch contains the source used for the 1.2 Android candidate APK, not a production release. Do not merge or deploy without device and security testing. The production website and database were not changed for this build.
+
+- Android application ID: `com.moroshow.mobilecandidate`; version code 3, version name 1.2; displayed name MoroShow. Native code resides in `android-support/` and is installed by `scripts/install-native-protection.mjs`.
+- To reproduce, set `VITE_NETSHOW_API_BASE` to the approved HTTPS backend, run `scripts/prepare-android.sh`, then set the generated `android/app/build.gradle` application ID and version to the values above before Gradle builds. Sign with the owner's existing Android signing key; this branch does not contain a signing key. A differently signed APK cannot update an existing installation.
+- CineSrc is the default; Mapple and VidUp are experimental sources. No real Android device was connected during this build; playback, audio, subtitles and availability were not verified. Third-party player content and ads are not controlled by MoroShow; domain filtering and popup restrictions cannot guarantee ad-free playback.
+- Continue Watching attempts to capture a top-level playing video on CineSrc and save the last sampled position when the player closes. This is experimental and may not work if the player uses another frame, changes its implementation, or the app is terminated. Guest progress is stored locally; account progress depends on backend availability. Test playback and resume on a device.
+- Community is intentionally disabled with a coming-soon message. Its database migration has not been applied, and profile creation, sharing, comments and friends are not functional in this APK. Review RLS, privacy, moderation and abuse handling, then test with multiple accounts in an isolated environment before enabling it. See `COMMUNITY_PLAYER_WIP.md`.
+- Downloads navigation is under the profile beside My Moro. Actual offline downloads require supported sources; the existing downloads screen does not provide downloaded content.
+- Checks performed: TypeScript compilation, Android release build, APK signing verification, playback policy unit test, continuation and player presentation test suites. These do not prove real playback or full end-to-end behavior.
