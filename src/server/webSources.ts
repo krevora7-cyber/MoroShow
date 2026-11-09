@@ -89,7 +89,7 @@ export function registerWebSources(app:Express){
  const p=profile(req),personId=number(req.params.id,1,2147483647),exclude=String(req.query.exclude||'');
  if(exclude)webId(exclude);
  const data=await tmdb(`person/${personId}/combined_credits`),seen=new Set<string>();
- const rows=(Array.isArray(data.cast)?data.cast:[]).filter((x:any)=>(x.media_type==='movie'||x.media_type==='tv')&&!x.adult&&Number.isSafeInteger(x.id)&&x.id>0&&(x.title||x.name))
+ const rows=(Array.isArray(data.cast)?data.cast:[]).filter((x:any)=>(x.media_type==='movie'||x.media_type==='tv')&&!x.adult&&Number.isSafeInteger(x.id)&&x.id>0&&(x.title||x.name)&&!(/^(self|himself|herself|themself|themselves)(\b|\s|$)/i.test(String(x.character||'').trim()))&&!(x.media_type==='tv'&&(x.genre_ids||[]).some((g:number)=>[10763,10764,10767].includes(g))))
  .sort((a:any,b:any)=>(Number(b.popularity)||0)-(Number(a.popularity)||0)).filter((x:any)=>{const k=`w32:${x.media_type}:${x.id}`;if(seen.has(k)||exclude===k||exclude.startsWith(k+':'))return false;seen.add(k);return true}).slice(0,p.isKid?20:48);
  let items:CatalogItem[]=[];if(p.isKid){for(let i=0;i<rows.length;i+=5){const batch=await Promise.all(rows.slice(i,i+5).map(async(x:any)=>{try{return toMovie(await allowed({type:x.media_type,id:x.id,season:undefined,episode:undefined},true),x.media_type,true)}catch{return null}}));items.push(...batch.filter((x:CatalogItem|null):x is CatalogItem=>!!x))}}else items=rows.map((x:any)=>toMovie(x,x.media_type));
  res.json({success:true,items});
