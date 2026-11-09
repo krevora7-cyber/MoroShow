@@ -85,6 +85,15 @@ export function registerWebSources(app:Express){
  const details=await dramaDetails(identity.seriesId);if(!details.episodes.some(e=>e.id===id))throw new Error('Episode unavailable');
  const result=await discoverDramaEpisodeSubtitles(id);res.json({success:true,complete:result.complete,subtitles:result.tracks.map(sub=>({...sub,url:subtitleLease(sub.url)}))});
  }catch(e:any){res.status(502).json({success:false,error:publicError(e)});}});
+ app.get('/api/people/:id/credits',async(req,res)=>{try{
+ const p=profile(req),personId=number(req.params.id,1,2147483647),exclude=String(req.query.exclude||'');
+ if(exclude)webId(exclude);
+ const data=await tmdb(`person/${personId}/combined_credits`),seen=new Set<string>();
+ const rows=(Array.isArray(data.cast)?data.cast:[]).filter((x:any)=>(x.media_type==='movie'||x.media_type==='tv')&&!x.adult&&Number.isSafeInteger(x.id)&&x.id>0&&(x.title||x.name)&&!(/^(self|himself|herself|themself|themselves)(\b|\s|$)/i.test(String(x.character||'').trim()))&&!(x.media_type==='tv'&&(x.genre_ids||[]).some((g:number)=>[10763,10764,10767].includes(g))))
+ .sort((a:any,b:any)=>(Number(b.popularity)||0)-(Number(a.popularity)||0)).filter((x:any)=>{const k=`w32:${x.media_type}:${x.id}`;if(seen.has(k)||exclude===k||exclude.startsWith(k+':'))return false;seen.add(k);return true}).slice(0,p.isKid?20:48);
+ let items:CatalogItem[]=[];if(p.isKid){for(let i=0;i<rows.length;i+=5){const batch=await Promise.all(rows.slice(i,i+5).map(async(x:any)=>{try{return toMovie(await allowed({type:x.media_type,id:x.id,season:undefined,episode:undefined},true),x.media_type,true)}catch{return null}}));items.push(...batch.filter((x:CatalogItem|null):x is CatalogItem=>!!x))}}else items=rows.map((x:any)=>toMovie(x,x.media_type));
+ res.json({success:true,items});
+ }catch(e:any){res.status(502).json({success:false,error:publicError(e)});}});
  app.get('/api/media/:id/artwork',async(req,res,next)=>{
  if(!/^(w32:|ani:|drama:|short:)/.test(req.params.id))return next();try{const p=profile(req);
  if(req.params.id.startsWith('short:'))throw new Error('Find this title again in Shorts.');
@@ -101,7 +110,7 @@ export function registerWebSources(app:Express){
  }catch(e:any){res.status(502).json({success:false,error:publicError(e)});}});
  app.post('/api/shorts/prepare',async(req,res)=>{try{const p=profile(req);if(p.isKid)return res.sendStatus(403);const id=String(req.body.contentId||''),identity=parseDramaIdentity(id),details=await dramaDetails(identity.seriesId);if(!details.episodes.some(e=>e.id===id))return res.sendStatus(404);await prepareShort(id,req.socket.localPort!,true);res.json({success:true});}catch{res.status(502).json({success:false,error:'Episode preparation unavailable'});}});
  app.post('/api/stream/token',async(req,res,next)=>{
- if(!/^(w32:|ani:|drama:|short:)/.test(String(req.body.contentId)))return next();try{const p=profile(req);let playbackNote:string|undefined;let content:CatalogItem,url:string,variants:{id:string;label:string}[],variantId=String(req.body.variantId||'vidstuck');
+ if(!/^(w32:|ani:|drama:|short:)/.test(String(req.body.contentId)))return next();try{const p=profile(req);let playbackNote:string|undefined;let content:CatalogItem,url:string,variants:{id:string;label:string}[],variantId=String(req.body.variantId||'cinesrc');
  if(String(req.body.contentId).startsWith('short:'))throw new Error('Find this title again in Shorts.');
  if(String(req.body.contentId).startsWith('drama:')){if(p.isKid)throw new Error('No verified Kids rating');const id=String(req.body.contentId),identity=parseDramaIdentity(id),d=await dramaDetails(identity.seriesId);const ep=d.episodes.find(e=>e.id===id);if(!ep)throw new Error('Select an available episode');const prepared=await prepareShort(id,req.socket.localPort!);if(!prepared)throw Error('Episode preparation unavailable');const {source,local}=prepared;let lease=prepared.lease;const compatible=req.body.compatibility===true||prepared.compatible;if(compatible)lease=compatibilityLease(local);return res.json({success:true,token:randomUUID(),streamUrl:lease,streamType:compatible?'hls':source.streamType,subtitles:source.subtitles.map(sub=>({...sub,url:subtitleLease(sub.url)})),variantId:'shorts',variants:[{id:'shorts',label:'Shorts'}],content:ep});}
  else{if(!['vidstuck','videasy','vidlink','cinesrc'].includes(variantId))throw new Error('Unknown player source');const id=webId(req.body.contentId),d=await allowed(id,p.isKid);url=embedUrl(variantId,id.type,id.id,id.season,id.episode);if(id.type==='tv'){const part=await tmdb(`tv/${id.id}/season/${id.season}`);if(!(part.episodes||[]).some((e:any)=>e.episode_number===id.episode&&released(e)))throw new Error('Episode is not released or available');}content={...toMovie(d,id.type,p.isKid),id:req.body.contentId,season:id.season,episode:id.episode};variants=EMBED_SERVERS.filter(s=>['vidstuck','videasy','vidlink','cinesrc'].includes(s.id)).map(s=>({id:s.id,label:s.name}));}
