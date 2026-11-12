@@ -2,8 +2,10 @@ export type BrowserPlaybackMode = 'standard' | 'compatibility' | 'protected';
 const origins = new Set(['https://vidstuck.cc','https://player.videasy.ws','https://cinesrc.st','https://player.cinezo.live','https://vidsrc.mov','https://vidlink.pro','https://vidsrc.sh','https://dramatip.net']);
 export const POPUP_SANDBOX = 'allow-scripts allow-same-origin allow-forms allow-presentation';
 export function movieEmbedPlayback(raw: string) {
- if (new URL(raw).origin !== 'https://cinesrc.st') throw Error('This movie embed is unavailable');
- return browserPlayback(raw, 'protected');
+ const url = new URL(raw);
+ if (url.origin !== 'https://cinesrc.st') throw Error('This movie embed is unavailable');
+ if (!url.searchParams.has('quality')) url.searchParams.set('quality', '720');
+ return browserPlayback(url.href, 'protected');
 }
 export function browserPlayback(raw: string, mode: BrowserPlaybackMode) {
  const url = new URL(raw);

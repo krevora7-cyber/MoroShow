@@ -5,7 +5,7 @@ import {useCatalog} from '../context/CatalogContext';
 import {useProfile} from '../context/ProfileContext';
 import {resolveMediaUrl} from '../player/netshowApi';
 import {movieEmbedPlayback} from '../player/browserPlayback';
-import {embedStartUrl, numberMovieSources} from '../player/embedPresentation';
+import {embedStartUrl, numberMovieSources, PRIMARY_MOVIE_SOURCE_ID} from '../player/embedPresentation';
 import {ProtectedEmbeddedPlayer} from './ProtectedEmbeddedPlayer';
 import {useDialog} from './useDialog';
 
@@ -77,13 +77,17 @@ export function EmbeddedPlayer() {
       // Unsupported player addresses cannot be embedded.
     }
   }
-  const variants = numberMovieSources(token.variants ?? []);
+  const variants = numberMovieSources([
+    {id: PRIMARY_MOVIE_SOURCE_ID},
+    ...(token.variants ?? []).filter(source => source.id !== PRIMARY_MOVIE_SOURCE_ID &&
+      (source.kind === 'direct' || (url && source.id === token.variantId))),
+  ]);
   const sourceKey = JSON.stringify([item.id, token.variantId, url || embed]);
   const playerKey = JSON.stringify([sourceKey, retry]);
   const initialPosition = retryPosition.current?.key === sourceKey ? retryPosition.current.time : startAt;
   const position = () => video.current && video.current.readyState > 0 ? video.current.currentTime : initialPosition;
   const selectSource = (id: string) => {
-    if (id === token.variantId) return;
+    if (id === token.variantId && (url || embed)) return;
     const current = position();
     retryPosition.current = undefined;
     void startPlayback(item, current, id);

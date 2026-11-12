@@ -55,7 +55,7 @@ test('direct playback returns only configured sources for the requested title an
     assert.equal(result.embedUrl, undefined);
     assert.deepEqual(result.episodes.map((episode: {number:number}) => episode.number), [1, 2]);
     assert.equal((await post({...newPlayer, variantId:'native-2'})).streamType, 'hls');
-    assert.deepEqual((await post({nativePlayback:true})).variants, [{id:'native-2',label:'Source 1'}]);
+    assert.deepEqual((await post({nativePlayback:true})).variants, [{id:'native-2',label:'Source 1',kind:'direct'}]);
     const missing = await post({...newPlayer, contentId:'w32:tv:42:1:3'});
     assert.equal(missing.streamUrl, '');
     assert.equal(missing.embedUrl, undefined);
@@ -75,7 +75,7 @@ test('direct playback returns only configured sources for the requested title an
       assert.equal(fallback.streamUrl, '');
       assert.equal(fallback.embedUrl, primaryEmbed);
       assert.equal(fallback.variantId, 'cinesrc');
-      assert.deepEqual(fallback.variants, [{id:'cinesrc',label:'Source 1'}]);
+      assert.deepEqual(fallback.variants, [{id:'cinesrc',label:'Source 1',kind:'embed'}]);
     }
     const legacy = await post({contentId:'w32:tv:42:1:3', variantId:'vidlink'});
     assert.equal(legacy.embedUrl, primaryEmbed);

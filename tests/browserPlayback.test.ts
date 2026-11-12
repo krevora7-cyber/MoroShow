@@ -21,6 +21,8 @@ test('protected mode keeps selected provider and episode while blocking popups',
 
 test('only the protected primary movie embed is accepted',()=>{
  assert.equal(movieEmbedPlayback('https://cinesrc.st/embed/movie/101').sandbox,POPUP_SANDBOX);
+ assert.equal(new URL(movieEmbedPlayback('https://cinesrc.st/embed/movie/101').url).searchParams.get('quality'),'720');
+ assert.equal(new URL(movieEmbedPlayback('https://cinesrc.st/embed/movie/101?quality=480').url).searchParams.get('quality'),'480');
  for(const url of ['https://vidstuck.cc/embed/movie/101','https://player.videasy.ws/embed/movie/101','https://vidlink.pro/movie/101','https://evil.example/embed/movie/101','https://user@cinesrc.st/embed/movie/101']){
   assert.throws(()=>movieEmbedPlayback(url));
  }

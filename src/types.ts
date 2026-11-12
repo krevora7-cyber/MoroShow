@@ -65,7 +65,7 @@ export interface WatchHistoryItem {
 export interface StreamTokenResponse {
   playbackNote?: string;
   embedUrl?: string;
-  variants?: {id:string;label:string}[];
+  variants?: {id:string;label:string;kind?:'embed'|'direct'}[];
   subtitles?: {url:string;lang:string;label:string}[];
   success: boolean;
   token: string;
