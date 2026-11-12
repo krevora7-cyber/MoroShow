@@ -58,6 +58,7 @@ export function EmbeddedPlayer() {
 
   if (!activePlayback) return null;
   const {catalogItem: item, tokenResponse: token, resumeTime} = activePlayback;
+  const directOnly = token.playbackMode === 'direct-only';
   const type = token.streamType;
   const saved = history.find(entry => entry.contentId === item.id && entry.progressPercent < 95);
   const startAt = resumeTime ?? saved?.currentTime ?? 0;
@@ -70,7 +71,7 @@ export function EmbeddedPlayer() {
     // An invalid media address is presented as an unavailable source.
   }
   let embed = '';
-  if (!url && token.embedUrl) {
+  if (!directOnly && !url && token.embedUrl) {
     try {
       embed = movieEmbedPlayback(token.embedUrl).url;
     } catch {
@@ -78,9 +79,10 @@ export function EmbeddedPlayer() {
     }
   }
   const variants = numberMovieSources([
-    {id: PRIMARY_MOVIE_SOURCE_ID},
-    ...(token.variants ?? []).filter(source => source.id !== PRIMARY_MOVIE_SOURCE_ID &&
-      (source.kind === 'direct' || (url && source.id === token.variantId))),
+    ...(directOnly ? [] : [{id: PRIMARY_MOVIE_SOURCE_ID}]),
+    ...(token.variants ?? []).filter(source => directOnly
+      ? source.kind === 'direct'
+      : source.id !== PRIMARY_MOVIE_SOURCE_ID && (source.kind === 'direct' || (url && source.id === token.variantId))),
   ]);
   const sourceKey = JSON.stringify([item.id, token.variantId, url || embed]);
   const playerKey = JSON.stringify([sourceKey, retry]);

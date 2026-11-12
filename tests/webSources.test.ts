@@ -17,7 +17,9 @@ test('direct playback returns only configured sources for the requested title an
   const originalFetch = globalThis.fetch;
   const oldKey = process.env.TMDB_API_KEY;
   const oldCatalog = process.env.MOROSHOW_NATIVE_HLS_CATALOG;
+  const oldPlaybackMode = process.env.MOROSHOW_MOVIE_PLAYBACK;
   process.env.TMDB_API_KEY = 'fixture';
+  delete process.env.MOROSHOW_MOVIE_PLAYBACK;
   process.env.MOROSHOW_NATIVE_HLS_CATALOG = JSON.stringify({
     'w32:tv:42:1:1': [
       {id:'native-1',label:'MP4',streamUrl:'https://media.example.invalid/42-1.mp4',streamType:'mp4'},
@@ -26,6 +28,9 @@ test('direct playback returns only configured sources for the requested title an
     'w32:tv:42:1:2': [
       {id:'native-1',label:'MP4',streamUrl:'https://media.example.invalid/42-2.mp4',streamType:'mp4'},
     ],
+    'w32:movie:42': [1, 2, 3, 4, 5].map(number => ({
+      id:`native-${number}`, label:`Backup ${number}`, streamUrl:`https://media.example.invalid/${number}/42.m3u8`,
+    })),
   });
   clearSourceCache();
   globalThis.fetch = async (input, init) => {
@@ -42,8 +47,8 @@ test('direct playback returns only configured sources for the requested title an
   const address = server.address();
   assert.ok(address && typeof address !== 'string');
   const adult = db.getProfiles().find(profile => !profile.isKid)!;
-  const post = (body: Record<string, unknown>) => originalFetch(
-    `http://127.0.0.1:${address.port}/api/stream/token`,
+  const post = (body: Record<string, unknown>, port = address.port) => originalFetch(
+    `http://127.0.0.1:${port}/api/stream/token`,
     {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({
       contentId:'w32:tv:42:1:1', profileId:adult.id, ...body,
     })},
@@ -81,12 +86,44 @@ test('direct playback returns only configured sources for the requested title an
     assert.equal(legacy.embedUrl, primaryEmbed);
     assert.deepEqual(primary.variants.map((source: {label:string}) => source.label), ['Source 1','Source 2','Source 3']);
     assert.match((await post({})).embedUrl, /^https:\/\/cinesrc\.st\/embed\//);
+
+    process.env.MOROSHOW_MOVIE_PLAYBACK = 'direct-only';
+    const cleanApp = express();
+    cleanApp.use(express.json());
+    registerWebSources(cleanApp);
+    const cleanServer = cleanApp.listen(0, '127.0.0.1');
+    await new Promise<void>(resolve => cleanServer.once('listening', resolve));
+    try {
+      const cleanAddress = cleanServer.address();
+      assert.ok(cleanAddress && typeof cleanAddress !== 'string');
+      const play = (body: Record<string, unknown>) => post({...withFallback, ...body}, cleanAddress.port);
+      const movie = await play({contentId:'w32:movie:42'});
+      assert.equal(movie.playbackMode, 'direct-only');
+      assert.equal(movie.variantId, 'native-1');
+      assert.equal(movie.embedUrl, undefined);
+      assert.deepEqual(movie.variants.map((source: {label:string}) => source.label), ['Source 1','Source 2','Source 3','Source 4']);
+      for (const number of [1, 2, 3, 4]) {
+        const source = await play({contentId:'w32:movie:42', variantId:`native-${number}`});
+        assert.equal(source.streamUrl, `https://media.example.invalid/${number}/42.m3u8`);
+        assert.equal(source.embedUrl, undefined);
+      }
+      const episode = await play({variantId:'native-2'});
+      assert.equal(episode.streamUrl, 'https://media.example.invalid/42-1.m3u8');
+      const uncovered = await play({contentId:'w32:tv:42:1:3'});
+      assert.equal(uncovered.embedUrl, undefined);
+      assert.deepEqual(uncovered.variants, []);
+    } finally {
+      cleanServer.closeAllConnections();
+      await new Promise<void>(resolve => cleanServer.close(() => resolve()));
+    }
   } finally {
     globalThis.fetch = originalFetch;
     if (oldKey === undefined) delete process.env.TMDB_API_KEY;
     else process.env.TMDB_API_KEY = oldKey;
     if (oldCatalog === undefined) delete process.env.MOROSHOW_NATIVE_HLS_CATALOG;
     else process.env.MOROSHOW_NATIVE_HLS_CATALOG = oldCatalog;
+    if (oldPlaybackMode === undefined) delete process.env.MOROSHOW_MOVIE_PLAYBACK;
+    else process.env.MOROSHOW_MOVIE_PLAYBACK = oldPlaybackMode;
     clearSourceCache();
     server.closeAllConnections();
     await new Promise<void>(resolve => server.close(() => resolve()));

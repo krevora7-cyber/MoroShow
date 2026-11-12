@@ -67,6 +67,7 @@ async function catalog(type:'movie'|'tv',page:number,q:string,kid:boolean,animat
 const released=(e:any)=>e.air_date&&e.air_date<=new Date().toISOString().slice(0,10);
 function publicError(e:any){const m=String(e?.message||'Source unavailable');return m.replace(/DramaTip/ig,'Shorts').replace(/https?:\/\/[^\s]+/g,'[source]').replace(/<[^>]*>/g,'').slice(0,350);}
 export function registerWebSources(app:Express){
+ const directOnly = process.env.MOROSHOW_MOVIE_PLAYBACK === 'direct-only';
  let directCatalog: ReturnType<typeof readDirectCatalog>;
  try {
    directCatalog = readDirectCatalog(process.env.MOROSHOW_NATIVE_HLS_CATALOG);
@@ -122,7 +123,7 @@ export function registerWebSources(app:Express){
  if(!/^(w32:|ani:|drama:|short:)/.test(String(req.body.contentId)))return next();try{const p=profile(req);const variantId=String(req.body.variantId||'cinesrc');
  if(String(req.body.contentId).startsWith('short:'))throw new Error('Find this title again in Shorts.');
  if(String(req.body.contentId).startsWith('drama:')){if(p.isKid)throw new Error('No verified Kids rating');const id=String(req.body.contentId),identity=parseDramaIdentity(id),d=await dramaDetails(identity.seriesId);const ep=d.episodes.find(e=>e.id===id);if(!ep)throw new Error('Select an available episode');const prepared=await prepareShort(id,req.socket.localPort!);if(!prepared)throw Error('Episode preparation unavailable');const {source,local}=prepared;let lease=prepared.lease;const compatible=req.body.compatibility===true||prepared.compatible;if(compatible)lease=compatibilityLease(local);return res.json({success:true,token:randomUUID(),streamUrl:lease,streamType:compatible?'hls':source.streamType,subtitles:source.subtitles.map(sub=>({...sub,url:subtitleLease(sub.url)})),variantId:'shorts',variants:[{id:'shorts',label:'Shorts'}],content:ep});}
- const native = req.body.nativePlayback === true;
+ const native = directOnly || req.body.nativePlayback === true;
  const embedSources = numberMovieSources([{id:PRIMARY_MOVIE_SOURCE_ID}]).map(source=>({...source,kind:'embed' as const}));
  if(!native&&![PRIMARY_MOVIE_SOURCE_ID,'vidstuck','videasy','vidlink'].includes(variantId))throw new Error('Unknown player source');
  const id = webId(req.body.contentId);
@@ -137,9 +138,10 @@ export function registerWebSources(app:Express){
  const content={...toMovie(d,id.type,p.isKid),id:req.body.contentId,season:id.season,episode:id.episode};
  if(native){
    const compatibleSources = (contentId:string) => (directCatalog.get(contentId) ?? [])
-     .filter(source => req.body.nativePlaybackVersion === 2 || source.streamType === 'hls');
+     .filter(source => req.body.nativePlaybackVersion === 2 || source.streamType === 'hls')
+     .slice(0, directOnly ? 4 : undefined);
    const sources = compatibleSources(content.id);
-   const allowEmbed = req.body.allowEmbedFallback === true;
+   const allowEmbed = !directOnly && req.body.allowEmbedFallback === true;
    const variants = numberMovieSources(allowEmbed ? [
      ...embedSources, ...sources.filter(source=>source.id!==PRIMARY_MOVIE_SOURCE_ID),
    ] : sources).map(source=>({
@@ -162,7 +164,7 @@ export function registerWebSources(app:Express){
    return res.json({
      success:true, token:selected?randomUUID():'', streamUrl:selected?.streamUrl ?? '',
      streamType:selected?.streamType ?? 'hls', variantId:selected?.id,
-     variants, episodes, content,
+     variants, episodes, content, playbackMode:directOnly ? 'direct-only' : undefined,
      playbackNote:selected?undefined:'No direct video source is configured for this title.',
    });
  }

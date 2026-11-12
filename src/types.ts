@@ -63,6 +63,7 @@ export interface WatchHistoryItem {
 }
 
 export interface StreamTokenResponse {
+  playbackMode?: 'direct-only';
   playbackNote?: string;
   embedUrl?: string;
   variants?: {id:string;label:string;kind?:'embed'|'direct'}[];
