@@ -69,22 +69,17 @@ test('direct playback returns only configured sources for the requested title an
     assert.equal(direct.streamType, 'mp4');
     assert.equal(direct.embedUrl, undefined);
     assert.deepEqual(direct.variants.map((source: {id:string}) => source.id), primary.variants.map((source: {id:string}) => source.id));
-    const expectedEmbeds = {
-      cinesrc:'https://cinesrc.st/embed/tv/42?autoplay=true&autonext=false&s=1&e=3',
-      vidstuck:'https://vidstuck.cc/embed/tv/42/1/3?branding=MoroShow&color=ed2939',
-      videasy:'https://player.videasy.ws/embed/tv/42/1/3',
-      vidlink:'https://vidlink.pro/tv/42/1/3',
-    };
-    for (const [variantId, url] of Object.entries(expectedEmbeds)) {
+    const primaryEmbed = 'https://cinesrc.st/embed/tv/42?autoplay=true&autonext=false&s=1&e=3';
+    for (const variantId of ['vidstuck','videasy','vidlink','native-1']) {
       const fallback = await post({...withFallback, contentId:'w32:tv:42:1:3', variantId});
       assert.equal(fallback.streamUrl, '');
-      assert.equal(fallback.embedUrl, url);
-      assert.equal(fallback.variantId, variantId);
-      assert.deepEqual(fallback.variants.map((source: {id:string}) => source.id), ['cinesrc','vidstuck','videasy','vidlink']);
-      assert.deepEqual(fallback.variants.map((source: {label:string}) => source.label), ['Source 1','Source 2','Source 3','Source 4']);
+      assert.equal(fallback.embedUrl, primaryEmbed);
+      assert.equal(fallback.variantId, 'cinesrc');
+      assert.deepEqual(fallback.variants, [{id:'cinesrc',label:'Source 1'}]);
     }
-    const stale = await post({...withFallback, contentId:'w32:tv:42:1:3', variantId:'native-1'});
-    assert.equal(stale.variantId, 'cinesrc');
+    const legacy = await post({contentId:'w32:tv:42:1:3', variantId:'vidlink'});
+    assert.equal(legacy.embedUrl, primaryEmbed);
+    assert.deepEqual(primary.variants.map((source: {label:string}) => source.label), ['Source 1','Source 2','Source 3']);
     assert.match((await post({})).embedUrl, /^https:\/\/cinesrc\.st\/embed\//);
   } finally {
     globalThis.fetch = originalFetch;

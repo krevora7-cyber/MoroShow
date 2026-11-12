@@ -10,12 +10,11 @@ export function orderEmbedVariants<T extends {id:string}>(variants:readonly T[],
  const order=['cinesrc','vidstuck','videasy','vidlink','cinezo','vidsrc-mov','vidsrc-sh'];
  return [...variants].sort((a,b)=>order.indexOf(a.id)-order.indexOf(b.id));
 }
-export const MOVIE_EMBED_SOURCE_IDS = ['cinesrc', 'vidstuck', 'videasy', 'vidlink'] as const;
+export const PRIMARY_MOVIE_SOURCE_ID = 'cinesrc';
 
 export function numberMovieSources(variants: readonly {id:string}[]) {
- const order = new Map<string, number>(MOVIE_EMBED_SOURCE_IDS.map((id, index) => [id, index]));
  return [...variants]
-   .sort((a, b) => (order.get(a.id) ?? order.size) - (order.get(b.id) ?? order.size))
+   .sort((a, b) => Number(b.id === PRIMARY_MOVIE_SOURCE_ID) - Number(a.id === PRIMARY_MOVIE_SOURCE_ID))
    .map(({id}, index) => ({id, label: `Source ${index + 1}`}));
 }
 // All selected servers render inside the app. External playback is never forced.

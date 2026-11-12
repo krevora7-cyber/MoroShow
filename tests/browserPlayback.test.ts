@@ -19,13 +19,9 @@ test('protected mode keeps selected provider and episode while blocking popups',
  for(const raw of ['https://evil.example/embed/movie/101','https://user@vidlink.pro/movie/101'])assert.throws(()=>browserPlayback(raw,'protected'));
 });
 
-test('movie embed compatibility is restricted to the selected backup origins',()=>{
+test('only the protected primary movie embed is accepted',()=>{
  assert.equal(movieEmbedPlayback('https://cinesrc.st/embed/movie/101').sandbox,POPUP_SANDBOX);
- for(const url of ['https://vidstuck.cc/embed/movie/101','https://player.videasy.ws/embed/movie/101','https://vidlink.pro/movie/101']){
-  const result=movieEmbedPlayback(url);
-  assert.equal(result.url,url);
-  assert.equal(result.sandbox,undefined);
+ for(const url of ['https://vidstuck.cc/embed/movie/101','https://player.videasy.ws/embed/movie/101','https://vidlink.pro/movie/101','https://evil.example/embed/movie/101','https://user@cinesrc.st/embed/movie/101']){
+  assert.throws(()=>movieEmbedPlayback(url));
  }
- assert.throws(()=>movieEmbedPlayback('https://evil.example/embed/movie/101'));
- assert.throws(()=>movieEmbedPlayback('https://user@vidlink.pro/movie/101'));
 });

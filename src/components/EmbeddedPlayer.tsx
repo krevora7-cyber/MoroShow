@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from 'react';
+import {useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
 import {ArrowLeft, RotateCw} from 'lucide-react';
 import {useCatalog} from '../context/CatalogContext';
@@ -6,7 +6,6 @@ import {useProfile} from '../context/ProfileContext';
 import {resolveMediaUrl} from '../player/netshowApi';
 import {movieEmbedPlayback} from '../player/browserPlayback';
 import {embedStartUrl, numberMovieSources} from '../player/embedPresentation';
-import {readVidstuckProgress} from '../player/vidstuckProgress';
 import {ProtectedEmbeddedPlayer} from './ProtectedEmbeddedPlayer';
 import {useDialog} from './useDialog';
 
@@ -31,34 +30,14 @@ const playerStyle = `.m-browser-player{position:fixed;inset:0;background:#050505
 .m-browser-player .m-player-help{bottom:calc(56px + env(safe-area-inset-bottom,0px));font-size:12px}}
 `;
 
-function EmbedFallback({url, title, contentId, startAt, onProgress}: {
+function EmbedFallback({url, title, startAt}: {
   url: string;
   title: string;
-  contentId: string;
   startAt: number;
-  onProgress: (time: number, duration: number) => void;
 }) {
-  const frame = useRef<HTMLIFrameElement>(null);
   const [config] = useState(() => movieEmbedPlayback(embedStartUrl(url, startAt)));
-  const progress = useRef(onProgress);
-  progress.current = onProgress;
-
-  useEffect(() => {
-    if (new URL(url).origin !== 'https://vidstuck.cc') return;
-    let lastSaved = 0;
-    const onMessage = (event: MessageEvent) => {
-      if (event.source !== frame.current?.contentWindow) return;
-      const position = readVidstuckProgress(event.origin, event.data, contentId);
-      if (!position || Date.now() - lastSaved < 5000) return;
-      lastSaved = Date.now();
-      progress.current(position.time, position.duration);
-    };
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-  }, [url, contentId]);
 
   return <iframe
-    ref={frame}
     src={config.url}
     title={title}
     tabIndex={0}
@@ -74,7 +53,6 @@ export function EmbeddedPlayer() {
   const {recordHistory, history} = useProfile();
   const [retry, setRetry] = useState(0);
   const retryPosition = useRef<{key: string; time: number} | undefined>(undefined);
-  const embedPosition = useRef<{key: string; time: number} | undefined>(undefined);
   const video = useRef<HTMLVideoElement>(null);
   const dialog = useDialog(!!activePlayback, stopPlayback);
 
@@ -103,10 +81,7 @@ export function EmbeddedPlayer() {
   const sourceKey = JSON.stringify([item.id, token.variantId, url || embed]);
   const playerKey = JSON.stringify([sourceKey, retry]);
   const initialPosition = retryPosition.current?.key === sourceKey ? retryPosition.current.time : startAt;
-  const position = () => {
-    if (video.current && video.current.readyState > 0) return video.current.currentTime;
-    return embedPosition.current?.key === playerKey ? embedPosition.current.time : initialPosition;
-  };
+  const position = () => video.current && video.current.readyState > 0 ? video.current.currentTime : initialPosition;
   const selectSource = (id: string) => {
     if (id === token.variantId) return;
     const current = position();
@@ -153,12 +128,7 @@ export function EmbeddedPlayer() {
         key={playerKey}
         url={embed}
         title={item.name}
-        contentId={item.id}
         startAt={initialPosition}
-        onProgress={(time, duration) => {
-          embedPosition.current = {key: playerKey, time};
-          save('hls', time, duration);
-        }}
       /> : <div className="m-embed-start"><p role="status">{token.playbackNote || 'No playback source is available for this title.'}</p></div>}
       {playbackLoading && <p role="status" className="m-player-help">Switching source…</p>}
       {playbackError && <p role="alert" className="m-player-help">{playbackError}</p>}

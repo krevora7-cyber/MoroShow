@@ -1,5 +1,5 @@
 import {readDirectCatalog} from './nativeCatalog';
-import {MOVIE_EMBED_SOURCE_IDS,numberMovieSources} from '../player/embedPresentation';
+import {PRIMARY_MOVIE_SOURCE_ID,numberMovieSources} from '../player/embedPresentation';
 import {prepareShort} from './shortsPreparation';
 import {compatibilityLease,registerShortsCompatibility} from './shortsCompatibility';
 import {dramaCatalog,dramaDetails,resolveDramaEpisodeSource,discoverDramaEpisodeSubtitles,parseDramaIdentity} from './dramaSource';
@@ -123,8 +123,8 @@ export function registerWebSources(app:Express){
  if(String(req.body.contentId).startsWith('short:'))throw new Error('Find this title again in Shorts.');
  if(String(req.body.contentId).startsWith('drama:')){if(p.isKid)throw new Error('No verified Kids rating');const id=String(req.body.contentId),identity=parseDramaIdentity(id),d=await dramaDetails(identity.seriesId);const ep=d.episodes.find(e=>e.id===id);if(!ep)throw new Error('Select an available episode');const prepared=await prepareShort(id,req.socket.localPort!);if(!prepared)throw Error('Episode preparation unavailable');const {source,local}=prepared;let lease=prepared.lease;const compatible=req.body.compatibility===true||prepared.compatible;if(compatible)lease=compatibilityLease(local);return res.json({success:true,token:randomUUID(),streamUrl:lease,streamType:compatible?'hls':source.streamType,subtitles:source.subtitles.map(sub=>({...sub,url:subtitleLease(sub.url)})),variantId:'shorts',variants:[{id:'shorts',label:'Shorts'}],content:ep});}
  const native = req.body.nativePlayback === true;
- const embedSources = numberMovieSources(MOVIE_EMBED_SOURCE_IDS.map(id=>({id})));
- if(!native&&!embedSources.some(source=>source.id===variantId))throw new Error('Unknown player source');
+ const embedSources = numberMovieSources([{id:PRIMARY_MOVIE_SOURCE_ID}]);
+ if(!native&&![PRIMARY_MOVIE_SOURCE_ID,'vidstuck','videasy','vidlink'].includes(variantId))throw new Error('Unknown player source');
  const id = webId(req.body.contentId);
  if(id.type==='tv'&&(!id.season||!id.episode))throw new Error('Select an episode first');
  const d = await allowed(id,p.isKid);
@@ -142,11 +142,11 @@ export function registerWebSources(app:Express){
    const allowEmbed = req.body.allowEmbedFallback === true;
    const variants = allowEmbed ? numberMovieSources([
      ...embedSources,
-     ...sources.filter(source=>!embedSources.some(embed=>embed.id===source.id)),
+     ...sources.filter(source=>source.id!==PRIMARY_MOVIE_SOURCE_ID),
    ]) : numberMovieSources(sources);
    const matchingSource = sources.find(source=>source.id===variantId);
    const selected = allowEmbed ? matchingSource : matchingSource ?? sources[0];
-   if (allowEmbed && (variantId === 'cinesrc' || !selected)) {
+   if (allowEmbed && (variantId === PRIMARY_MOVIE_SOURCE_ID || !selected)) {
      return sendEmbed(variants);
    }
    const episodes = seasonEpisodes
@@ -168,9 +168,8 @@ export function registerWebSources(app:Express){
  return sendEmbed(embedSources);
 
  function sendEmbed(variants: typeof embedSources){
-   const selected=embedSources.find(source=>source.id===variantId)?.id ?? 'cinesrc';
-   const url=embedUrl(selected,id.type,id.id,id.season,id.episode);
-   return res.json({success:true,token:'',streamUrl:'',streamType:'hls',embedUrl:url,variantId:selected,variants,content});
+   const url=embedUrl(PRIMARY_MOVIE_SOURCE_ID,id.type,id.id,id.season,id.episode);
+   return res.json({success:true,token:'',streamUrl:'',streamType:'hls',embedUrl:url,variantId:PRIMARY_MOVIE_SOURCE_ID,variants,content});
  }
  }catch(e:any){res.status(502).json({success:false,error:publicError(e)});}});
 }
