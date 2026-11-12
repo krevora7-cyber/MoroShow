@@ -4,8 +4,8 @@ import {ArrowLeft, RotateCw} from 'lucide-react';
 import {useCatalog} from '../context/CatalogContext';
 import {useProfile} from '../context/ProfileContext';
 import {resolveMediaUrl} from '../player/netshowApi';
-import {browserPlayback} from '../player/browserPlayback';
-import {embedStartUrl} from '../player/embedPresentation';
+import {movieEmbedPlayback} from '../player/browserPlayback';
+import {embedStartUrl, numberMovieSources} from '../player/embedPresentation';
 import {readVidstuckProgress} from '../player/vidstuckProgress';
 import {ProtectedEmbeddedPlayer} from './ProtectedEmbeddedPlayer';
 import {useDialog} from './useDialog';
@@ -39,7 +39,7 @@ function EmbedFallback({url, title, contentId, startAt, onProgress}: {
   onProgress: (time: number, duration: number) => void;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
-  const [config] = useState(() => browserPlayback(embedStartUrl(url, startAt), 'protected'));
+  const [config] = useState(() => movieEmbedPlayback(embedStartUrl(url, startAt)));
   const progress = useRef(onProgress);
   progress.current = onProgress;
 
@@ -94,12 +94,12 @@ export function EmbeddedPlayer() {
   let embed = '';
   if (!url && token.embedUrl) {
     try {
-      embed = browserPlayback(token.embedUrl, 'protected').url;
+      embed = movieEmbedPlayback(token.embedUrl).url;
     } catch {
       // Unsupported player addresses cannot be embedded.
     }
   }
-  const variants = token.variants ?? [];
+  const variants = numberMovieSources(token.variants ?? []);
   const sourceKey = JSON.stringify([item.id, token.variantId, url || embed]);
   const playerKey = JSON.stringify([sourceKey, retry]);
   const initialPosition = retryPosition.current?.key === sourceKey ? retryPosition.current.time : startAt;

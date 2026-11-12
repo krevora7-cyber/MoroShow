@@ -1,4 +1,5 @@
 import {readDirectCatalog} from './nativeCatalog';
+import {MOVIE_EMBED_SOURCE_IDS,numberMovieSources} from '../player/embedPresentation';
 import {prepareShort} from './shortsPreparation';
 import {compatibilityLease,registerShortsCompatibility} from './shortsCompatibility';
 import {dramaCatalog,dramaDetails,resolveDramaEpisodeSource,discoverDramaEpisodeSubtitles,parseDramaIdentity} from './dramaSource';
@@ -21,7 +22,7 @@ export function embedUrl(server:string,type:string,id:number,season?:number,epis
  if(!p||!['movie','tv'].includes(type)||!Number.isSafeInteger(id)||id<1)throw new Error('Invalid player selection');
  if(type==='tv'&&![season,episode].every(n=>Number.isSafeInteger(n)&&n!>0))throw new Error('Select an episode first');
  if(server==='vidstuck')return `${p.origin}/embed/${type}/${id}${type==='tv'?`/${season}/${episode}`:''}?branding=MoroShow&color=ed2939`;
- if(server==='cinesrc')return `${p.origin}/embed/${type}/${id}?autoplay=false&autonext=false${type==='tv'?`&s=${season}&e=${episode}`:''}`;
+ if(server==='cinesrc')return `${p.origin}/embed/${type}/${id}?autoplay=true&autonext=false${type==='tv'?`&s=${season}&e=${episode}`:''}`;
  return `${p.origin}${p.prefix}/${type}/${id}${type==='tv'?`/${season}/${episode}`:''}`;
 }
 const cache=new Map<string,{expires:number;data:any}>(),inflight=new Map<string,Promise<any>>();
@@ -122,7 +123,8 @@ export function registerWebSources(app:Express){
  if(String(req.body.contentId).startsWith('short:'))throw new Error('Find this title again in Shorts.');
  if(String(req.body.contentId).startsWith('drama:')){if(p.isKid)throw new Error('No verified Kids rating');const id=String(req.body.contentId),identity=parseDramaIdentity(id),d=await dramaDetails(identity.seriesId);const ep=d.episodes.find(e=>e.id===id);if(!ep)throw new Error('Select an available episode');const prepared=await prepareShort(id,req.socket.localPort!);if(!prepared)throw Error('Episode preparation unavailable');const {source,local}=prepared;let lease=prepared.lease;const compatible=req.body.compatibility===true||prepared.compatible;if(compatible)lease=compatibilityLease(local);return res.json({success:true,token:randomUUID(),streamUrl:lease,streamType:compatible?'hls':source.streamType,subtitles:source.subtitles.map(sub=>({...sub,url:subtitleLease(sub.url)})),variantId:'shorts',variants:[{id:'shorts',label:'Shorts'}],content:ep});}
  const native = req.body.nativePlayback === true;
- if(!native&&!['vidstuck','videasy','vidlink','cinesrc'].includes(variantId))throw new Error('Unknown player source');
+ const embedSources = numberMovieSources(MOVIE_EMBED_SOURCE_IDS.map(id=>({id})));
+ if(!native&&!embedSources.some(source=>source.id===variantId))throw new Error('Unknown player source');
  const id = webId(req.body.contentId);
  if(id.type==='tv'&&(!id.season||!id.episode))throw new Error('Select an episode first');
  const d = await allowed(id,p.isKid);
@@ -137,9 +139,15 @@ export function registerWebSources(app:Express){
    const compatibleSources = (contentId:string) => (directCatalog.get(contentId) ?? [])
      .filter(source => req.body.nativePlaybackVersion === 2 || source.streamType === 'hls');
    const sources = compatibleSources(content.id);
-   const selected = sources.find(source=>source.id===variantId) ?? sources[0];
-   if (!selected && req.body.allowEmbedFallback === true) {
-     return sendEmbed();
+   const allowEmbed = req.body.allowEmbedFallback === true;
+   const variants = allowEmbed ? numberMovieSources([
+     ...embedSources,
+     ...sources.filter(source=>!embedSources.some(embed=>embed.id===source.id)),
+   ]) : numberMovieSources(sources);
+   const matchingSource = sources.find(source=>source.id===variantId);
+   const selected = allowEmbed ? matchingSource : matchingSource ?? sources[0];
+   if (allowEmbed && (variantId === 'cinesrc' || !selected)) {
+     return sendEmbed(variants);
    }
    const episodes = seasonEpisodes
      .map(episode=>({
@@ -153,15 +161,14 @@ export function registerWebSources(app:Express){
    return res.json({
      success:true, token:selected?randomUUID():'', streamUrl:selected?.streamUrl ?? '',
      streamType:selected?.streamType ?? 'hls', variantId:selected?.id,
-     variants:sources.map(({id,label})=>({id,label})), episodes, content,
+     variants, episodes, content,
      playbackNote:selected?undefined:'No direct video source is configured for this title.',
    });
  }
- return sendEmbed();
+ return sendEmbed(embedSources);
 
- function sendEmbed(){
-   const variants=EMBED_SERVERS.filter(s=>['vidstuck','videasy','vidlink','cinesrc'].includes(s.id)).map(s=>({id:s.id,label:s.name}));
-   const selected=variants.find(source=>source.id===variantId)?.id ?? 'cinesrc';
+ function sendEmbed(variants: typeof embedSources){
+   const selected=embedSources.find(source=>source.id===variantId)?.id ?? 'cinesrc';
    const url=embedUrl(selected,id.type,id.id,id.season,id.episode);
    return res.json({success:true,token:'',streamUrl:'',streamType:'hls',embedUrl:url,variantId:selected,variants,content});
  }
