@@ -138,6 +138,9 @@ export function registerWebSources(app:Express){
      .filter(source => req.body.nativePlaybackVersion === 2 || source.streamType === 'hls');
    const sources = compatibleSources(content.id);
    const selected = sources.find(source=>source.id===variantId) ?? sources[0];
+   if (!selected && req.body.allowEmbedFallback === true) {
+     return sendEmbed();
+   }
    const episodes = seasonEpisodes
      .map(episode=>({
        id:`w32:tv:${id.id}:${id.season}:${episode.episode_number}`,
@@ -154,8 +157,13 @@ export function registerWebSources(app:Express){
      playbackNote:selected?undefined:'No direct video source is configured for this title.',
    });
  }
- const url=embedUrl(variantId,id.type,id.id,id.season,id.episode);
- const variants=EMBED_SERVERS.filter(s=>['vidstuck','videasy','vidlink','cinesrc'].includes(s.id)).map(s=>({id:s.id,label:s.name}));
- res.json({success:true,token:'',streamUrl:'',streamType:'hls',embedUrl:url,variantId,variants,content});
+ return sendEmbed();
+
+ function sendEmbed(){
+   const variants=EMBED_SERVERS.filter(s=>['vidstuck','videasy','vidlink','cinesrc'].includes(s.id)).map(s=>({id:s.id,label:s.name}));
+   const selected=variants.find(source=>source.id===variantId)?.id ?? 'cinesrc';
+   const url=embedUrl(selected,id.type,id.id,id.season,id.episode);
+   return res.json({success:true,token:'',streamUrl:'',streamType:'hls',embedUrl:url,variantId:selected,variants,content});
+ }
  }catch(e:any){res.status(502).json({success:false,error:publicError(e)});}});
 }

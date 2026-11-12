@@ -60,6 +60,25 @@ test('direct playback returns only configured sources for the requested title an
     assert.equal(missing.streamUrl, '');
     assert.equal(missing.embedUrl, undefined);
     assert.deepEqual(missing.variants, []);
+    const withFallback = {...newPlayer, allowEmbedFallback:true};
+    const direct = await post(withFallback);
+    assert.equal(direct.streamType, 'mp4');
+    assert.equal(direct.embedUrl, undefined);
+    const expectedEmbeds = {
+      cinesrc:'https://cinesrc.st/embed/tv/42?autoplay=false&autonext=false&s=1&e=3',
+      vidstuck:'https://vidstuck.cc/embed/tv/42/1/3?branding=MoroShow&color=ed2939',
+      videasy:'https://player.videasy.ws/embed/tv/42/1/3',
+      vidlink:'https://vidlink.pro/tv/42/1/3',
+    };
+    for (const [variantId, url] of Object.entries(expectedEmbeds)) {
+      const fallback = await post({...withFallback, contentId:'w32:tv:42:1:3', variantId});
+      assert.equal(fallback.streamUrl, '');
+      assert.equal(fallback.embedUrl, url);
+      assert.equal(fallback.variantId, variantId);
+      assert.deepEqual(fallback.variants.map((source: {id:string}) => source.id), ['vidstuck','videasy','cinesrc','vidlink']);
+    }
+    const stale = await post({...withFallback, contentId:'w32:tv:42:1:3', variantId:'native-1'});
+    assert.equal(stale.variantId, 'cinesrc');
     assert.match((await post({})).embedUrl, /^https:\/\/cinesrc\.st\/embed\//);
   } finally {
     globalThis.fetch = originalFetch;
