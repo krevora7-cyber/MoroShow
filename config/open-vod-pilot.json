@@ -1,0 +1,40 @@
+{
+  "w32:movie:10378": [
+    {
+      "id": "native-1",
+      "label": "Blender Video",
+      "streamUrl": "https://video.blender.org/object-storage/web_videos/6402b77c-b61f-4a06-96ca-c8420a2becf4-480.mp4",
+      "streamType": "mp4"
+    },
+    {
+      "id": "native-2",
+      "label": "Mux HLS demo",
+      "streamUrl": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+      "streamType": "hls"
+    }
+  ],
+  "w32:tv:206762:1:1": [
+    {
+      "id": "native-1",
+      "label": "Internet Archive",
+      "streamUrl": "https://archive.org/download/Caminandes1LlamaDrama/01_llama_drama_1080p.mp4",
+      "streamType": "mp4"
+    }
+  ],
+  "w32:tv:206762:1:2": [
+    {
+      "id": "native-1",
+      "label": "Blender Video",
+      "streamUrl": "https://video.blender.org/object-storage/web_videos/fb70d459-48d2-4db5-adba-813c84f9200a-480.mp4",
+      "streamType": "mp4"
+    }
+  ],
+  "w32:tv:206762:1:3": [
+    {
+      "id": "native-1",
+      "label": "Blender Video",
+      "streamUrl": "https://video.blender.org/object-storage/web_videos/23f3ef79-15dc-44c5-aa45-cf92e78a4509-480.mp4",
+      "streamType": "mp4"
+    }
+  ]
+}
