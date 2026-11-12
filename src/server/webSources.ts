@@ -1,3 +1,4 @@
+import {readDirectCatalog} from './nativeCatalog';
 import {prepareShort} from './shortsPreparation';
 import {compatibilityLease,registerShortsCompatibility} from './shortsCompatibility';
 import {dramaCatalog,dramaDetails,resolveDramaEpisodeSource,discoverDramaEpisodeSubtitles,parseDramaIdentity} from './dramaSource';
@@ -65,6 +66,13 @@ async function catalog(type:'movie'|'tv',page:number,q:string,kid:boolean,animat
 const released=(e:any)=>e.air_date&&e.air_date<=new Date().toISOString().slice(0,10);
 function publicError(e:any){const m=String(e?.message||'Source unavailable');return m.replace(/DramaTip/ig,'Shorts').replace(/https?:\/\/[^\s]+/g,'[source]').replace(/<[^>]*>/g,'').slice(0,350);}
 export function registerWebSources(app:Express){
+ let directCatalog: ReturnType<typeof readDirectCatalog>;
+ try {
+   directCatalog = readDirectCatalog(process.env.MOROSHOW_NATIVE_HLS_CATALOG);
+ } catch {
+   console.error('Invalid MOROSHOW_NATIVE_HLS_CATALOG configuration.');
+   directCatalog = new Map();
+ }
  registerDramaMedia(app);registerShortsCompatibility(app);
  app.get('/api/web-sources/status',(_req,res)=>res.json({success:true,configured:!!process.env.TMDB_API_KEY,servers:EMBED_SERVERS.map(p=>({id:p.id,name:p.name})),animation:'TMDB genre 16',tv:false,offlineDownloads:false}));
  app.get(['/api/web-sources/catalog','/api/web-sources/anime'],async(req,res)=>{try{
@@ -110,11 +118,44 @@ export function registerWebSources(app:Express){
  }catch(e:any){res.status(502).json({success:false,error:publicError(e)});}});
  app.post('/api/shorts/prepare',async(req,res)=>{try{const p=profile(req);if(p.isKid)return res.sendStatus(403);const id=String(req.body.contentId||''),identity=parseDramaIdentity(id),details=await dramaDetails(identity.seriesId);if(!details.episodes.some(e=>e.id===id))return res.sendStatus(404);await prepareShort(id,req.socket.localPort!,true);res.json({success:true});}catch{res.status(502).json({success:false,error:'Episode preparation unavailable'});}});
  app.post('/api/stream/token',async(req,res,next)=>{
- if(!/^(w32:|ani:|drama:|short:)/.test(String(req.body.contentId)))return next();try{const p=profile(req);let playbackNote:string|undefined;let content:CatalogItem,url:string,variants:{id:string;label:string}[],variantId=String(req.body.variantId||'cinesrc');
+ if(!/^(w32:|ani:|drama:|short:)/.test(String(req.body.contentId)))return next();try{const p=profile(req);const variantId=String(req.body.variantId||'cinesrc');
  if(String(req.body.contentId).startsWith('short:'))throw new Error('Find this title again in Shorts.');
  if(String(req.body.contentId).startsWith('drama:')){if(p.isKid)throw new Error('No verified Kids rating');const id=String(req.body.contentId),identity=parseDramaIdentity(id),d=await dramaDetails(identity.seriesId);const ep=d.episodes.find(e=>e.id===id);if(!ep)throw new Error('Select an available episode');const prepared=await prepareShort(id,req.socket.localPort!);if(!prepared)throw Error('Episode preparation unavailable');const {source,local}=prepared;let lease=prepared.lease;const compatible=req.body.compatibility===true||prepared.compatible;if(compatible)lease=compatibilityLease(local);return res.json({success:true,token:randomUUID(),streamUrl:lease,streamType:compatible?'hls':source.streamType,subtitles:source.subtitles.map(sub=>({...sub,url:subtitleLease(sub.url)})),variantId:'shorts',variants:[{id:'shorts',label:'Shorts'}],content:ep});}
- else{if(!['vidstuck','videasy','vidlink','cinesrc'].includes(variantId))throw new Error('Unknown player source');const id=webId(req.body.contentId),d=await allowed(id,p.isKid);url=embedUrl(variantId,id.type,id.id,id.season,id.episode);if(id.type==='tv'){const part=await tmdb(`tv/${id.id}/season/${id.season}`);if(!(part.episodes||[]).some((e:any)=>e.episode_number===id.episode&&released(e)))throw new Error('Episode is not released or available');}content={...toMovie(d,id.type,p.isKid),id:req.body.contentId,season:id.season,episode:id.episode};variants=EMBED_SERVERS.filter(s=>['vidstuck','videasy','vidlink','cinesrc'].includes(s.id)).map(s=>({id:s.id,label:s.name}));}
- const direct=false;
- res.json({success:true,token:direct?randomUUID():'',streamUrl:direct?url:'',streamType:'hls',...(direct?{}:{embedUrl:url}),variantId,variants,content,playbackNote});
+ const native = req.body.nativePlayback === true;
+ if(!native&&!['vidstuck','videasy','vidlink','cinesrc'].includes(variantId))throw new Error('Unknown player source');
+ const id = webId(req.body.contentId);
+ if(id.type==='tv'&&(!id.season||!id.episode))throw new Error('Select an episode first');
+ const d = await allowed(id,p.isKid);
+ let seasonEpisodes: {episode_number:number; name?:string}[] = [];
+ if(id.type==='tv'){
+   const part=await tmdb(`tv/${id.id}/season/${id.season}`);
+   seasonEpisodes=(part.episodes||[]).filter(released);
+   if(!seasonEpisodes.some(e=>e.episode_number===id.episode))throw new Error('Episode is not released or available');
+ }
+ const content={...toMovie(d,id.type,p.isKid),id:req.body.contentId,season:id.season,episode:id.episode};
+ if(native){
+   const compatibleSources = (contentId:string) => (directCatalog.get(contentId) ?? [])
+     .filter(source => req.body.nativePlaybackVersion === 2 || source.streamType === 'hls');
+   const sources = compatibleSources(content.id);
+   const selected = sources.find(source=>source.id===variantId) ?? sources[0];
+   const episodes = seasonEpisodes
+     .map(episode=>({
+       id:`w32:tv:${id.id}:${id.season}:${episode.episode_number}`,
+       number:episode.episode_number,
+       name:episode.name || `Episode ${episode.episode_number}`,
+     }))
+     .filter(episode=>compatibleSources(episode.id).length>0)
+     .sort((a,b)=>a.number-b.number);
+   res.set('Cache-Control','private, no-store');
+   return res.json({
+     success:true, token:selected?randomUUID():'', streamUrl:selected?.streamUrl ?? '',
+     streamType:selected?.streamType ?? 'hls', variantId:selected?.id,
+     variants:sources.map(({id,label})=>({id,label})), episodes, content,
+     playbackNote:selected?undefined:'No direct video source is configured for this title.',
+   });
+ }
+ const url=embedUrl(variantId,id.type,id.id,id.season,id.episode);
+ const variants=EMBED_SERVERS.filter(s=>['vidstuck','videasy','vidlink','cinesrc'].includes(s.id)).map(s=>({id:s.id,label:s.name}));
+ res.json({success:true,token:'',streamUrl:'',streamType:'hls',embedUrl:url,variantId,variants,content});
  }catch(e:any){res.status(502).json({success:false,error:publicError(e)});}});
 }

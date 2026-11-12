@@ -160,7 +160,8 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
         body: JSON.stringify({
           contentId: item.id,
           profileId: activeProfile.id,
-          variantId,compatibility:variantId==='shorts-compatible'
+          variantId,compatibility:variantId==='shorts-compatible',
+          ...(item.id.startsWith('w32:') ? {nativePlayback:true,nativePlaybackVersion:2} : {}),
         })
       });
 

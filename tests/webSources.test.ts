@@ -12,3 +12,63 @@ test('HTTP routes filter kids, combine animation, load one season and reject una
  const get=(p:string)=>real(base+p).then(r=>r.json()),post=(id:string,profileId=kid.id)=>real(base+'/api/stream/token',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({contentId:id,profileId,variantId:'cinesrc'})}).then(r=>r.json());
  try{let d=await get(`/api/web-sources/catalog?type=animation&profileId=${adult.id}`);assert.equal(d.items.length,4);assert.ok(d.items.every((i:any)=>i.genreIds.includes(16)));d=await get(`/api/web-sources/catalog?type=animation&profileId=${kid.id}`);assert.equal(d.items.length,2);assert.ok(d.items.every((i:any)=>i.kidsVerified));d=await get(`/api/web-sources/catalog?type=search&q=Title&profileId=${kid.id}`);assert.equal(d.items.length,2);assert.equal((await post('w32:movie:2')).success,false);assert.equal((await post('w32:movie:1')).embedUrl,'https://cinesrc.st/embed/movie/1?autoplay=false&autonext=false');d=await get(`/api/series/w32:tv:1/episodes?season=2&profileId=${kid.id}`);assert.deepEqual(d.seasons,[1,2]);assert.equal(d.episodes.length,1);assert.ok(!paths.some(p=>p.endsWith('/season/1')));assert.equal((await post('w32:tv:1:2:4')).success,false);assert.equal((await post('w32:tv:1:2:3')).embedUrl,'https://cinesrc.st/embed/tv/1?autoplay=false&autonext=false&s=2&e=3');assert.equal((await get('/api/web-sources/catalog')).success,false);assert.equal((await get(`/api/web-sources/clips?profileId=${kid.id}`)).items.length,0);assert.equal((await post('ani:old:1',adult.id)).success,false);}finally{db.deleteProfile(kid.id);globalThis.fetch=real;if(old)process.env.TMDB_API_KEY=old;else delete process.env.TMDB_API_KEY;clearSourceCache();server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));}
 });
+
+test('direct playback returns only configured sources for the requested title and player version', async () => {
+  const originalFetch = globalThis.fetch;
+  const oldKey = process.env.TMDB_API_KEY;
+  const oldCatalog = process.env.MOROSHOW_NATIVE_HLS_CATALOG;
+  process.env.TMDB_API_KEY = 'fixture';
+  process.env.MOROSHOW_NATIVE_HLS_CATALOG = JSON.stringify({
+    'w32:tv:42:1:1': [
+      {id:'native-1',label:'MP4',streamUrl:'https://media.example.invalid/42-1.mp4',streamType:'mp4'},
+      {id:'native-2',label:'HLS',streamUrl:'https://media.example.invalid/42-1.m3u8'},
+    ],
+    'w32:tv:42:1:2': [
+      {id:'native-1',label:'MP4',streamUrl:'https://media.example.invalid/42-2.mp4',streamType:'mp4'},
+    ],
+  });
+  clearSourceCache();
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(String(input));
+    if (url.hostname !== 'api.themoviedb.org') return originalFetch(input, init);
+    const episodes = [1, 2, 3].map(episode_number => ({episode_number, air_date:'2020-01-01'}));
+    return Response.json(url.pathname.endsWith('/season/1') ? {episodes} : {id:42, name:'Test series'});
+  };
+  const app = express();
+  app.use(express.json());
+  registerWebSources(app);
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise<void>(resolve => server.once('listening', resolve));
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const adult = db.getProfiles().find(profile => !profile.isKid)!;
+  const post = (body: Record<string, unknown>) => originalFetch(
+    `http://127.0.0.1:${address.port}/api/stream/token`,
+    {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({
+      contentId:'w32:tv:42:1:1', profileId:adult.id, ...body,
+    })},
+  ).then(response => response.json());
+  try {
+    const newPlayer = {nativePlayback:true, nativePlaybackVersion:2};
+    const result = await post(newPlayer);
+    assert.equal(result.streamUrl, 'https://media.example.invalid/42-1.mp4');
+    assert.equal(result.embedUrl, undefined);
+    assert.deepEqual(result.episodes.map((episode: {number:number}) => episode.number), [1, 2]);
+    assert.equal((await post({...newPlayer, variantId:'native-2'})).streamType, 'hls');
+    assert.deepEqual((await post({nativePlayback:true})).variants, [{id:'native-2',label:'HLS'}]);
+    const missing = await post({...newPlayer, contentId:'w32:tv:42:1:3'});
+    assert.equal(missing.streamUrl, '');
+    assert.equal(missing.embedUrl, undefined);
+    assert.deepEqual(missing.variants, []);
+    assert.match((await post({})).embedUrl, /^https:\/\/cinesrc\.st\/embed\//);
+  } finally {
+    globalThis.fetch = originalFetch;
+    if (oldKey === undefined) delete process.env.TMDB_API_KEY;
+    else process.env.TMDB_API_KEY = oldKey;
+    if (oldCatalog === undefined) delete process.env.MOROSHOW_NATIVE_HLS_CATALOG;
+    else process.env.MOROSHOW_NATIVE_HLS_CATALOG = oldCatalog;
+    clearSourceCache();
+    server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+  }
+});
