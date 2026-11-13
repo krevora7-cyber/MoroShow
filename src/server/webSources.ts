@@ -6,6 +6,7 @@ import {mediaLease,subtitleLease,registerDramaMedia} from './dramaPlayback';
 import type { Express, Request } from 'express';
 import type { CatalogItem } from '../types';
 import { db } from './db';
+import { directVodOptions, resolveDirectVod } from './directVod';
 export const EMBED_SERVERS = [
  {id:'vidstuck',name:'Vidstuck',origin:'https://vidstuck.cc',prefix:'/embed'},
  {id:'videasy',name:'Videasy',origin:'https://player.videasy.ws',prefix:'/embed'},
@@ -110,11 +111,38 @@ export function registerWebSources(app:Express){
  }catch(e:any){res.status(502).json({success:false,error:publicError(e)});}});
  app.post('/api/shorts/prepare',async(req,res)=>{try{const p=profile(req);if(p.isKid)return res.sendStatus(403);const id=String(req.body.contentId||''),identity=parseDramaIdentity(id),details=await dramaDetails(identity.seriesId);if(!details.episodes.some(e=>e.id===id))return res.sendStatus(404);await prepareShort(id,req.socket.localPort!,true);res.json({success:true});}catch{res.status(502).json({success:false,error:'Episode preparation unavailable'});}});
  app.post('/api/stream/token',async(req,res,next)=>{
- if(!/^(w32:|ani:|drama:|short:)/.test(String(req.body.contentId)))return next();try{const p=profile(req);let playbackNote:string|undefined;let content:CatalogItem,url:string,variants:{id:string;label:string}[],variantId=String(req.body.variantId||'cinesrc');
+ if(!/^(w32:|ani:|drama:|short:)/.test(String(req.body.contentId)))return next();try{const p=profile(req);const variantId=String(req.body.variantId||'cinesrc');
  if(String(req.body.contentId).startsWith('short:'))throw new Error('Find this title again in Shorts.');
  if(String(req.body.contentId).startsWith('drama:')){if(p.isKid)throw new Error('No verified Kids rating');const id=String(req.body.contentId),identity=parseDramaIdentity(id),d=await dramaDetails(identity.seriesId);const ep=d.episodes.find(e=>e.id===id);if(!ep)throw new Error('Select an available episode');const prepared=await prepareShort(id,req.socket.localPort!);if(!prepared)throw Error('Episode preparation unavailable');const {source,local}=prepared;let lease=prepared.lease;const compatible=req.body.compatibility===true||prepared.compatible;if(compatible)lease=compatibilityLease(local);return res.json({success:true,token:randomUUID(),streamUrl:lease,streamType:compatible?'hls':source.streamType,subtitles:source.subtitles.map(sub=>({...sub,url:subtitleLease(sub.url)})),variantId:'shorts',variants:[{id:'shorts',label:'Shorts'}],content:ep});}
- else{if(!['vidstuck','videasy','vidlink','cinesrc'].includes(variantId))throw new Error('Unknown player source');const id=webId(req.body.contentId),d=await allowed(id,p.isKid);url=embedUrl(variantId,id.type,id.id,id.season,id.episode);if(id.type==='tv'){const part=await tmdb(`tv/${id.id}/season/${id.season}`);if(!(part.episodes||[]).some((e:any)=>e.episode_number===id.episode&&released(e)))throw new Error('Episode is not released or available');}content={...toMovie(d,id.type,p.isKid),id:req.body.contentId,season:id.season,episode:id.episode};variants=EMBED_SERVERS.filter(s=>['vidstuck','videasy','vidlink','cinesrc'].includes(s.id)).map(s=>({id:s.id,label:s.name}));}
- const direct=false;
- res.json({success:true,token:direct?randomUUID():'',streamUrl:direct?url:'',streamType:'hls',...(direct?{}:{embedUrl:url}),variantId,variants,content,playbackNote});
+ const directOptions = directVodOptions();
+ const provider = directOptions.find(source => source.id === variantId);
+ const embedOptions = EMBED_SERVERS.filter(source => ['vidstuck','videasy','vidlink','cinesrc'].includes(source.id));
+ const embed = embedOptions.some(source => source.id === variantId);
+ if (!provider && !embed) throw new Error('Unknown player source');
+ const id = webId(req.body.contentId), d = await allowed(id,p.isKid);
+ if (id.type === 'tv') {
+   if (!id.season || !id.episode) throw new Error('Select an episode first');
+   const part = await tmdb(`tv/${id.id}/season/${id.season}`);
+   if (!(part.episodes || []).some((e:any) => e.episode_number === id.episode && released(e))) {
+     throw new Error('Episode is not released or available');
+   }
+ }
+ const content = {...toMovie(d,id.type,p.isKid),id:req.body.contentId,season:id.season,episode:id.episode};
+ const variants = [
+   ...embedOptions.map(source => ({id:source.id,label:source.name})),
+   ...directOptions.map(({id,label}) => ({id,label})),
+ ];
+ if (provider) {
+   const stream = await resolveDirectVod(provider, {
+     ...id, name: content.name, originalName: d.original_title || d.original_name,
+     year: (d.release_date || d.first_air_date || '').slice(0,4),
+   });
+   if (!stream) throw new Error(`${provider.label} has no playable source for this title. Try another source.`);
+   return res.set('Cache-Control','no-store').json({
+     success:true, token:randomUUID(), ...stream, variantId, variants, content,
+   });
+ }
+ const url = embedUrl(variantId,id.type,id.id,id.season,id.episode);
+ res.json({success:true,token:'',streamUrl:'',streamType:'hls',embedUrl:url,variantId,variants,content});
  }catch(e:any){res.status(502).json({success:false,error:publicError(e)});}});
 }
