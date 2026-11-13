@@ -40,8 +40,11 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
   const headers=new Headers(init?.headers);
   if(supabase){const {data}=await supabase.auth.getSession();if(data.session)headers.set('Authorization',`Bearer ${data.session.access_token}`);}
   if(previewEnabled()&&!supabase)return (await import('./frontendPreview')).previewFetch(path,init);
-  const response=await fetch(apiUrl(path),{...init,headers});
+  let response=await fetch(apiUrl(path),{...init,headers});
   // A revision conflict means the transaction made no changes; reload and retry once.
-  if(supabase&&response.status===409&&typeof init?.body==='string')return fetch(apiUrl(path),{...init,headers});
+  if(supabase&&response.status===409&&typeof init?.body==='string')response=await fetch(apiUrl(path),{...init,headers});
+  if (response.headers.get('content-type')?.toLowerCase().includes('text/html')) {
+    throw new Error('The MoroShow server returned a web page instead of an API response. Try again in a moment.');
+  }
   return response;
 }

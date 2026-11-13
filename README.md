@@ -6,12 +6,10 @@ React + TypeScript + Vite frontend, Express backend. This repository excludes cr
 
 1. Import this private repository at https://vercel.com/new.
 2. Framework: Vite. Root directory: repository root. Build: `npm run build`. Output: `dist`. Node: 24.x.
-3. For the initial interface review leave `VITE_NETSHOW_API_BASE` empty. The vercel.app deployment shows a labelled interface preview with a static TMDB catalogue snapshot. Playback and account services require the backend.
-4. When the HTTPS backend is available, set `VITE_NETSHOW_API_BASE=https://your-backend.example` in Vercel and redeploy. Configure that backend to allow the Vercel origin through CORS.
+3. Vercel forwards same-origin `/api/*` requests to the MoroShow backend on Render. Leave `VITE_NETSHOW_API_BASE` empty to use that route for browser deployments. To point at another backend, set the variable to its HTTPS base URL and configure its allowed origins.
+4. For a standalone interface demo, set `VITE_MOROSHOW_INTERFACE_PREVIEW=true` and leave `VITE_NETSHOW_API_BASE` empty.
 
-**The initial static deployment is not a working streaming service.** Profiles, catalogue, media resolution and history currently depend on Express. No API secrets belong in `VITE_*` variables.
-
-The preview is automatically disabled when VITE_NETSHOW_API_BASE is configured. It is not a streaming-service deployment.
+The backend provides profiles, catalogue, media resolution and history. Keep API secrets out of `VITE_*` variables.
 
 ## Local complete application
 

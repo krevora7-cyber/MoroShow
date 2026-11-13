@@ -5,7 +5,11 @@
   "installCommand": "npm ci",
   "rewrites": [
     {
-      "source": "/((?!assets/).*)",
+      "source": "/api/:path*",
+      "destination": "https://moroshow.onrender.com/api/:path*"
+    },
+    {
+      "source": "/((?!api(?:/|$)|assets/).*)",
       "destination": "/index.html"
     }
   ]
