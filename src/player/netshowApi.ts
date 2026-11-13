@@ -1,5 +1,6 @@
 import {supabase} from '../auth/client';
 import {previewEnabled} from './previewMode';
+import {isVodPreview} from './vodPreview';
 /** Keep one API origin across browser and installed iOS app.
  * In a browser the API is same-origin; a bundled native build MUST configure
  * VITE_NETSHOW_API_BASE=https://your-netshow-backend.example when building.
@@ -8,6 +9,7 @@ import {previewEnabled} from './previewMode';
 import { Capacitor } from '@capacitor/core';
 
 export function getApiBase(): string {
+  if (!Capacitor.isNativePlatform() && isVodPreview()) return window.location.origin;
   const specified = (import.meta.env.VITE_NETSHOW_API_BASE || '').trim().replace(/\/+$/, '');
   if (specified) {
     const parsed = new URL(specified);
@@ -39,7 +41,7 @@ export function resolveMediaUrl(value: string): string {
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const headers=new Headers(init?.headers);
   if(supabase){const {data}=await supabase.auth.getSession();if(data.session)headers.set('Authorization',`Bearer ${data.session.access_token}`);}
-  if(previewEnabled()&&!supabase)return (await import('./frontendPreview')).previewFetch(path,init);
+  if(!isVodPreview()&&previewEnabled()&&!supabase)return (await import('./frontendPreview')).previewFetch(path,init);
   let response=await fetch(apiUrl(path),{...init,headers});
   // A revision conflict means the transaction made no changes; reload and retry once.
   if(supabase&&response.status===409&&typeof init?.body==='string')response=await fetch(apiUrl(path),{...init,headers});

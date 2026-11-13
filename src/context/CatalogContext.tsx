@@ -1,7 +1,7 @@
 import {isGuestProfile,requestSignIn} from '../auth/guest';
 import {catalogJson} from '../player/catalogCache';
 import { apiFetch } from '../player/netshowApi';
-import { isVodPreview, vodPreviewPlayback } from '../player/vodPreview';
+import { isVodPreview } from '../player/vodPreview';
 /**
  * Catalog Context & Playback Controller
  * 
@@ -34,6 +34,7 @@ interface CatalogContextType {
   playbackLoading: boolean;
   playbackError: string | null;
   pendingPlayback: CatalogItem | null;
+  pendingResumeTime?: number;
   setPendingPlayback: (item: CatalogItem | null) => void;
   selectedSeries: CatalogItem | null;
   isSettingsOpen: boolean;
@@ -75,6 +76,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [playbackLoading, setPlaybackLoading] = useState(false);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
 
+  const [pendingResumeTime, setPendingResumeTime] = useState<number>();
   const [pendingPlayback, setPendingPlayback] = useState<CatalogItem | null>(null);
   const [selectedSeries, setSelectedSeries] = useState<CatalogItem | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -138,16 +140,17 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
     if (!activeProfile) return;
     if(item.id.startsWith('iptv:')&&(!variantId||variantId==='vidlink'))variantId='auto';
     if(!variantId&&item.id.startsWith('drama:'))variantId='shorts';
-    if(!variantId&&item.id.startsWith('w32:')){variantId='cinesrc';setPendingPlayback(item);}
-    if(!variantId){setPlaybackError(null);setPendingPlayback(item);return;}
-
-    const demo = vodPreviewPlayback(item, variantId);
-    if (demo) {
-      stopPlayback();
-      setPendingPlayback(null);
-      setActivePlayback({ catalogItem: item, resumeTime, tokenResponse: demo });
-      return;
+    if (!variantId && item.id.startsWith('w32:')) {
+      if (isVodPreview()) {
+        stopPlayback();
+        setPendingResumeTime(resumeTime);
+        setPendingPlayback(item);
+        return;
+      }
+      variantId = 'cinesrc';
+      setPendingPlayback(item);
     }
+    if(!variantId){setPlaybackError(null);setPendingPlayback(item);return;}
 
     playbackRequest.current?.abort();
     const controller=new AbortController();playbackRequest.current=controller;
@@ -198,6 +201,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
   const stopPlayback = () => {
     playbackRequest.current?.abort();playbackRequest.current=null;setPlaybackLoading(false);
     setActivePlayback(null);
+    setPendingResumeTime(undefined);
     setPlaybackError(null);
   };
 
@@ -237,6 +241,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
         playbackLoading,
         playbackError,
         pendingPlayback,
+        pendingResumeTime,
         setPendingPlayback,
         selectedSeries,
         isSettingsOpen,
