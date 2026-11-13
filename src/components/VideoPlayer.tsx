@@ -31,7 +31,7 @@ export const VideoPlayer: React.FC = () => {
   const tokenData = activePlayback?.tokenResponse;
   const item = activePlayback?.catalogItem;
   const sourceVariants = orderEmbedVariants(tokenData?.variants || item?.variants || [], false)
-    .map((variant, index) => ({ ...variant, label: `Source ${index + 1}` }));
+    .map((variant, index) => ({ ...variant, label: variant.id.startsWith('demo-') ? variant.label : `Source ${index + 1}` }));
   const isLive = item?.kind === 'live';
   const saved = history.find(entry => entry.contentId === item?.id && entry.progressPercent < 95);
   const startAt = activePlayback?.resumeTime ?? saved?.currentTime ?? 0;

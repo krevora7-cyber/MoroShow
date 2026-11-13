@@ -1,6 +1,7 @@
 import {isGuestProfile,requestSignIn} from '../auth/guest';
 import {catalogJson} from '../player/catalogCache';
 import { apiFetch } from '../player/netshowApi';
+import { vodPreviewPlayback } from '../player/vodPreview';
 /**
  * Catalog Context & Playback Controller
  * 
@@ -139,6 +140,14 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
     if(!variantId&&item.id.startsWith('drama:'))variantId='shorts';
     if(!variantId&&item.id.startsWith('w32:')){variantId='cinesrc';setPendingPlayback(item);}
     if(!variantId){setPlaybackError(null);setPendingPlayback(item);return;}
+
+    const demo = vodPreviewPlayback(item, variantId);
+    if (demo) {
+      stopPlayback();
+      setPendingPlayback(null);
+      setActivePlayback({ catalogItem: item, resumeTime, tokenResponse: demo });
+      return;
+    }
 
     playbackRequest.current?.abort();
     const controller=new AbortController();playbackRequest.current=controller;
