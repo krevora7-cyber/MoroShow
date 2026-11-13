@@ -1,6 +1,7 @@
 import Artplayer from 'artplayer';
 import { isNativeIOS, nativePlayerEvents, playNative } from '../native/nativePlayer';
 import { resolveMediaUrl } from '../player/netshowApi';
+import { orderEmbedVariants } from '../player/embedPresentation';
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
 import mpegts from 'mpegts.js';
@@ -16,8 +17,8 @@ declare global {
 }
 
 export const VideoPlayer: React.FC = () => {
-  const { activePlayback, stopPlayback, liveChannels, startPlayback } = useCatalog();
-  const { recordHistory } = useProfile();
+  const { activePlayback, stopPlayback, liveChannels, startPlayback, playbackLoading, playbackError } = useCatalog();
+  const { recordHistory, history } = useProfile();
 
   const artContainerRef = useRef<HTMLDivElement>(null);
   const artInstanceRef = useRef<any>(null);
@@ -29,8 +30,11 @@ export const VideoPlayer: React.FC = () => {
 
   const tokenData = activePlayback?.tokenResponse;
   const item = activePlayback?.catalogItem;
-  const sourceVariants = tokenData?.variants || item?.variants || [];
+  const sourceVariants = orderEmbedVariants(tokenData?.variants || item?.variants || [], false)
+    .map((variant, index) => ({ ...variant, label: `Source ${index + 1}` }));
   const isLive = item?.kind === 'live';
+  const saved = history.find(entry => entry.contentId === item?.id && entry.progressPercent < 95);
+  const startAt = activePlayback?.resumeTime ?? saved?.currentTime ?? 0;
 
   const destroyEngines = () => {
     if (hlsRef.current) {
@@ -63,7 +67,7 @@ export const VideoPlayer: React.FC = () => {
           contentId: item.id,
           name: item.name,
           streamUrl: '',
-          streamType: item.streamType,
+          streamType: tokenData?.streamType ?? item.streamType,
           kind: item.kind,
           category: item.category,
           posterUrl: item.backdropUrl || item.logoUrl,
@@ -263,8 +267,8 @@ export const VideoPlayer: React.FC = () => {
     });
 
     art.on('ready', () => {
-      if (activePlayback?.resumeTime && activePlayback.resumeTime > 0 && !isLive) {
-        art.seek = activePlayback.resumeTime;
+      if (startAt > 0 && !isLive) {
+        art.seek = startAt;
       }
       art.play().catch(() => {});
     });
@@ -303,7 +307,7 @@ export const VideoPlayer: React.FC = () => {
           url: resolveMediaUrl(tokenData.streamUrl),
           title: item.name,
           isLive,
-          startAt: activePlayback?.resumeTime || 0
+          startAt
         });
       } catch (e) {
         if (!cancelled) setErrorMessage(e instanceof Error ? e.message : 'Unable to launch iOS player.');
@@ -325,7 +329,7 @@ export const VideoPlayer: React.FC = () => {
           contentId: item.id,
           name: item.name,
           streamUrl: '',
-          streamType: item.streamType,
+          streamType: tokenData?.streamType ?? item.streamType,
           kind: item.kind,
           category: item.category,
           posterUrl: item.backdropUrl || item.logoUrl,
@@ -337,7 +341,7 @@ export const VideoPlayer: React.FC = () => {
     return () => clearInterval(interval);
   }, [item?.id, isLive]);
 
-  if (!activePlayback) return null;
+  if (!activePlayback || !item) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col select-none overflow-hidden">
@@ -369,7 +373,8 @@ export const VideoPlayer: React.FC = () => {
         <div className="flex items-center gap-2 pointer-events-auto">
           {sourceVariants.length > 1 && (
             <select
-              aria-label="Select video quality"
+              aria-label="Select playback source"
+              disabled={playbackLoading}
               value={tokenData?.variantId || ''}
               onChange={e => handleSourceSelect(e.target.value)}
               className="bg-black/75 border border-white/20 text-white text-xs rounded-xl px-3 py-2 backdrop-blur-md"
@@ -396,6 +401,8 @@ export const VideoPlayer: React.FC = () => {
       {/* ArtPlayer Container */}
       <div ref={artContainerRef} className="w-full h-full flex-1" />
 
+      {(playbackLoading || playbackError) && <p role={playbackError ? 'alert' : 'status'} className="absolute bottom-16 inset-x-4 z-50 mx-auto w-fit rounded bg-black/90 px-4 py-2 text-white">{playbackError || 'Switching source…'}</p>}
+
       {/* Error Overlay */}
       {errorMessage && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/85 backdrop-blur-md p-6 z-40">
@@ -405,7 +412,8 @@ export const VideoPlayer: React.FC = () => {
             <p className="text-sm text-neutral-400 mb-5">{errorMessage}</p>
             {sourceVariants.length > 1 && (
               <select
-                aria-label="Switch video quality"
+                aria-label="Switch playback source"
+                disabled={playbackLoading}
                 value={tokenData?.variantId || ''}
                 onChange={e => handleSourceSelect(e.target.value)}
                 className="w-full bg-neutral-800 text-white p-3 rounded-xl mb-4 text-xs"
@@ -418,7 +426,8 @@ export const VideoPlayer: React.FC = () => {
             <div className="flex items-center justify-center gap-3">
               <button
                 type="button"
-                onClick={initArtPlayer}
+                disabled={playbackLoading}
+                onClick={() => void startPlayback(item, Number(artInstanceRef.current?.currentTime || startAt), tokenData?.variantId)}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm transition-all"
               >
                 <RefreshCw className="w-4 h-4" />
