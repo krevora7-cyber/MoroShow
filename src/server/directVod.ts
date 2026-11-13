@@ -51,10 +51,15 @@ async function json(provider: Provider, path: string, signal: AbortSignal, body?
   const headers = new Headers({ Accept: 'application/json' });
   if (provider.secret) headers.set('X-Worker-Secret', provider.secret);
   if (body) headers.set('Content-Type', 'application/json');
-  const response = await fetch(url, {
+  const request: RequestInit = {
     headers, signal, redirect: 'error',
     ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}),
-  });
+  };
+  let response = await fetch(url, request);
+  if (provider.id === 'moviebox' && [502, 503, 504].includes(response.status) && !signal.aborted) {
+    await response.body?.cancel();
+    response = await fetch(url, request);
+  }
   if (!response.ok) throw new Error('Provider request failed.');
   return response.json();
 }
@@ -71,17 +76,29 @@ function titleKey(value: string) {
 }
 
 async function fromMovieBox(provider: Provider, title: VodTitle, signal: AbortSignal) {
-  const { items } = await json(provider, '/search', signal, { keyword: title.name });
-  const names = new Set([title.name, title.originalName ?? title.name].map(titleKey));
-  const matches = Array.isArray(items) && title.year ? items.filter(item =>
-    item?.type === title.type && typeof item.title === 'string' && names.has(titleKey(item.title)) &&
-    typeof item.releaseDate === 'string' && item.releaseDate.slice(0, 4) === title.year &&
-    typeof item.subjectId === 'string' && /^\d+$/.test(item.subjectId)
-  ) : [];
-  const ids = [...new Set(matches.map(item => item.subjectId as string))];
-  if (ids.length !== 1) return;
+  const original = title.originalName?.trim();
+  const names = new Set([title.name, original ?? title.name].map(titleKey));
+  const keywords = original && titleKey(original) !== titleKey(title.name)
+    ? [title.name, original] : [title.name];
+  let subjectId: string | undefined;
+  if (!title.year) return;
+  for (const keyword of keywords) {
+    const { items } = await json(provider, '/search', signal, { keyword });
+    const matches = Array.isArray(items) ? items.filter(item =>
+      item?.type === title.type && typeof item.title === 'string' && names.has(titleKey(item.title)) &&
+      typeof item.releaseDate === 'string' && item.releaseDate.slice(0, 4) === title.year &&
+      typeof item.subjectId === 'string' && /^\d+$/.test(item.subjectId)
+    ) : [];
+    const ids = [...new Set(matches.map(item => item.subjectId as string))];
+    if (ids.length > 1) return;
+    if (ids.length === 1) {
+      subjectId = ids[0];
+      break;
+    }
+  }
+  if (!subjectId) return;
   const query = new URLSearchParams({ se: String(title.season ?? 0), ep: String(title.episode ?? 0) });
-  const { streams } = await json(provider, `/stream/${ids[0]}`, signal, undefined, query);
+  const { streams } = await json(provider, `/stream/${subjectId}`, signal, undefined, query);
   if (!Array.isArray(streams)) return;
   for (const stream of [...streams].sort((a, b) => movieBoxRank(b) - movieBoxRank(a))) {
     const candidate = asStream(stream?.url, stream?.format);
