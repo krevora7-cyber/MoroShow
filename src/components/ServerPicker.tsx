@@ -11,7 +11,7 @@ import { useDialog } from './useDialog';
 
 type Variant = { id: string; label: string };
 const embedded = ['vidstuck', 'videasy', 'cinesrc', 'vidlink'].map(id => ({ id, label: '' }));
-const directLabels: Record<string, string> = { moviebox: 'MovieBox · MP4', cinepro: 'CinePro', icefy: 'Icefy · HLS' };
+const directLabels: Record<string, string> = { cinepro: 'CinePro', icefy: 'Icefy · HLS' };
 const shortLabels: Record<string, string> = { dramabox: 'DramaBox', goodshort: 'GoodShort', reelshort: 'ReelShort' };
 
 export function ServerPicker() {

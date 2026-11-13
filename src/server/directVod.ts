@@ -3,18 +3,14 @@ type VodTitle = {
   id: number;
   season?: number;
   episode?: number;
-  name: string;
-  originalName?: string;
-  year?: string;
 };
 
 type DirectVod = { streamUrl: string; streamType: 'mp4' | 'hls' };
 
-export const DIRECT_VOD_IDS = ['moviebox', 'cinepro', 'icefy'] as const;
+export const DIRECT_VOD_IDS = ['cinepro', 'icefy'] as const;
 export type DirectVodId = typeof DIRECT_VOD_IDS[number];
 
 const labels: Record<DirectVodId, string> = {
-  moviebox: 'MovieBox',
   cinepro: 'CinePro',
   icefy: 'Icefy',
 };
@@ -29,37 +25,25 @@ function secureUrl(value: unknown): URL | undefined {
 
 export function directVodOptions() {
   const urls = {
-    moviebox: process.env.MOROSHOW_MOVIEBOX_URL,
     cinepro: process.env.MOROSHOW_CINEPRO_URL,
     icefy: process.env.MOROSHOW_ICEFY_URL,
   };
   return DIRECT_VOD_IDS.flatMap(id => {
     const url = secureUrl(urls[id]);
-    const secret = id === 'moviebox' ? process.env.MOROSHOW_MOVIEBOX_SECRET?.trim() : undefined;
-    if (!url || (id === 'moviebox' && !secret)) return [];
-    return [{ id, label: labels[id], base: url, secret }];
+    return url ? [{ id, label: labels[id], base: url }] : [];
   });
 }
 
 type Provider = ReturnType<typeof directVodOptions>[number];
 
-async function json(provider: Provider, path: string, signal: AbortSignal, body?: object, query?: URLSearchParams) {
+async function json(provider: Provider, path: string, signal: AbortSignal) {
   const url = new URL(provider.base);
   url.pathname = url.pathname.replace(/\/+$/, '') + path;
-  url.search = query?.toString() ?? '';
+  url.search = '';
   url.hash = '';
-  const headers = new Headers({ Accept: 'application/json' });
-  if (provider.secret) headers.set('X-Worker-Secret', provider.secret);
-  if (body) headers.set('Content-Type', 'application/json');
-  const request: RequestInit = {
-    headers, signal, redirect: 'error',
-    ...(body ? { method: 'POST', body: JSON.stringify(body) } : {}),
-  };
-  let response = await fetch(url, request);
-  if (provider.id === 'moviebox' && [502, 503, 504].includes(response.status) && !signal.aborted) {
-    await response.body?.cancel();
-    response = await fetch(url, request);
-  }
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json' }, signal, redirect: 'error',
+  });
   if (!response.ok) throw new Error('Provider request failed.');
   return response.json();
 }
@@ -71,51 +55,9 @@ function asStream(urlValue: unknown, streamType: unknown): DirectVod | undefined
   return { streamUrl: url.href, streamType };
 }
 
-function titleKey(value: string) {
-  return value.normalize('NFKC').trim().toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-}
-
-async function fromMovieBox(provider: Provider, title: VodTitle, signal: AbortSignal) {
-  const original = title.originalName?.trim();
-  const names = new Set([title.name, original ?? title.name].map(titleKey));
-  const keywords = original && titleKey(original) !== titleKey(title.name)
-    ? [title.name, original] : [title.name];
-  let subjectId: string | undefined;
-  if (!title.year) return;
-  for (const keyword of keywords) {
-    const { items } = await json(provider, '/search', signal, { keyword });
-    const matches = Array.isArray(items) ? items.filter(item =>
-      item?.type === title.type && typeof item.title === 'string' && names.has(titleKey(item.title)) &&
-      typeof item.releaseDate === 'string' && item.releaseDate.slice(0, 4) === title.year &&
-      typeof item.subjectId === 'string' && /^\d+$/.test(item.subjectId)
-    ) : [];
-    const ids = [...new Set(matches.map(item => item.subjectId as string))];
-    if (ids.length > 1) return;
-    if (ids.length === 1) {
-      subjectId = ids[0];
-      break;
-    }
-  }
-  if (!subjectId) return;
-  const query = new URLSearchParams({ se: String(title.season ?? 0), ep: String(title.episode ?? 0) });
-  const { streams } = await json(provider, `/stream/${subjectId}`, signal, undefined, query);
-  if (!Array.isArray(streams)) return;
-  for (const stream of [...streams].sort((a, b) => movieBoxRank(b) - movieBoxRank(a))) {
-    const candidate = asStream(stream?.url, stream?.format);
-    if (candidate?.streamType === 'mp4') return candidate;
-  }
-}
-
-function movieBoxRank(stream: { codecName?: string; resolution?: number } | null) {
-  const resolution = Number(stream?.resolution) || 0;
-  const avc = /^(h264|avc)/i.test(stream?.codecName ?? '');
-  return (avc ? 10000 : 0) - Math.abs(resolution - 720);
-}
-
 export async function resolveDirectVod(provider: Provider, title: VodTitle): Promise<DirectVod | undefined> {
-  const signal = AbortSignal.timeout(provider.id === 'moviebox' ? 30000 : 12000);
+  const signal = AbortSignal.timeout(12000);
   try {
-    if (provider.id === 'moviebox') return await fromMovieBox(provider, title, signal);
     if (provider.id === 'icefy') {
       const episode = title.type === 'tv' ? `/${title.season}/${title.episode}` : '';
       const data = await json(provider, `/${title.type}/${title.id}${episode}`, signal);

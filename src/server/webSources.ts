@@ -133,10 +133,7 @@ export function registerWebSources(app:Express){
    ...directOptions.map(({id,label}) => ({id,label})),
  ];
  if (provider) {
-   const stream = await resolveDirectVod(provider, {
-     ...id, name: content.name, originalName: d.original_title || d.original_name,
-     year: (d.release_date || d.first_air_date || '').slice(0,4),
-   });
+   const stream = await resolveDirectVod(provider, id);
    if (!stream) throw new Error(`${provider.label} has no playable source for this title. Try another source.`);
    return res.set('Cache-Control','no-store').json({
      success:true, token:randomUUID(), ...stream, variantId, variants, content,

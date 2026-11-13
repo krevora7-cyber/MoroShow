@@ -15,29 +15,9 @@ test('HTTP routes filter kids, combine animation, load one season and reject una
  };
  const priorEnv = Object.fromEntries(Object.keys(providerEnv).map(key => [key, process.env[key]]));
  const providerRequests: string[] = [];
- const movieBoxKeywords: string[] = [];
  const reply = (data: object) => Response.json(data);
  globalThis.fetch=(async(input:any,init:any)=>{const u=new URL(String(input));
- if (u.hostname === 'moviebox.test') {
-   providerRequests.push(u.pathname + u.search);
-   assert.equal(new Headers(init.headers).get('X-Worker-Secret'), 'fixture-secret');
-   if (u.pathname === '/search') {
-     const {keyword} = JSON.parse(init.body);
-     movieBoxKeywords.push(keyword);
-     if (movieBoxKeywords.length === 1) return new Response(null,{status:503});
-     return reply({items:[
-       {type:'movie', title:'Title', releaseDate:'1999-01-01', subjectId:'111'},
-       ...(keyword === 'Original Title'
-         ? [{type:'movie', title:'Original Title', releaseDate:'2024-01-01', subjectId:'222'}]
-         : []),
-     ]});
-   }
-   assert.equal(u.pathname + u.search, '/stream/222?se=0&ep=0');
-   return reply({streams:[
-     {url:'https://cdn.test/1080.mp4', format:'mp4', codecName:'hevc', resolution:1080},
-     {url:'https://cdn.test/720.mp4?signature=fixture', format:'mp4', codecName:'h264', resolution:720},
-   ]});
- }
+ if (u.hostname === 'moviebox.test') providerRequests.push(u.hostname);
  if (u.hostname === 'cinepro.test') {
    providerRequests.push(u.pathname);
    return reply({sources:[
@@ -57,14 +37,14 @@ test('HTTP routes filter kids, combine animation, load one season and reject una
  try{let d=await get(`/api/people/123/credits?profileId=${adult.id}&exclude=w32:movie:1`);assert.deepEqual(d.items.map((i:any)=>i.id),['w32:movie:2','w32:tv:3']);for(const variant of ['vidstuck','videasy','cinesrc','vidlink']){const result=await post('w32:movie:1',adult.id,variant);assert.equal(result.success,true);assert.equal(result.variantId,variant);assert.equal(result.variants.length,4);assert.ok(result.embedUrl.startsWith('https://'));}d=await get(`/api/web-sources/catalog?type=animation&profileId=${adult.id}`);assert.equal(d.items.length,4);assert.ok(d.items.every((i:any)=>i.genreIds.includes(16)));d=await get(`/api/web-sources/catalog?type=animation&profileId=${kid.id}`);assert.equal(d.items.length,2);assert.ok(d.items.every((i:any)=>i.kidsVerified));d=await get(`/api/web-sources/catalog?type=search&q=Title&profileId=${kid.id}`);assert.equal(d.items.length,2);assert.equal((await post('w32:movie:2')).success,false);assert.equal((await post('w32:movie:1')).embedUrl,'https://cinesrc.st/embed/movie/1?autoplay=false&autonext=false');d=await get(`/api/series/w32:tv:1/episodes?season=2&profileId=${kid.id}`);assert.deepEqual(d.seasons,[1,2]);assert.equal(d.episodes.length,1);assert.ok(!paths.some(p=>p.endsWith('/season/1')));assert.equal((await post('w32:tv:1:2:4')).success,false);assert.equal((await post('w32:tv:1:2:3')).embedUrl,'https://cinesrc.st/embed/tv/1?autoplay=false&autonext=false&s=2&e=3');assert.equal((await get('/api/web-sources/catalog')).success,false);assert.equal((await get(`/api/web-sources/clips?profileId=${kid.id}`)).items.length,0);assert.equal((await post('ani:old:1',adult.id)).success,false);
   Object.assign(process.env, providerEnv);
   assert.equal((await post('w32:movie:1',adult.id,'moviebox')).success,false);
-  assert.equal((await post('w32:movie:2',kid.id,'moviebox',true)).success,false);
+  assert.equal((await post('w32:movie:1',adult.id,'moviebox',true)).success,false);
+  assert.equal((await post('w32:tv:1:2:3',adult.id,'moviebox',true)).success,false);
   assert.equal((await post('w32:tv:1:2:4',adult.id,'cinepro',true)).success,false);
+  const sources = await post('w32:movie:1',adult.id,'cinesrc',true);
+  assert.equal(sources.success,true);
+  assert.deepEqual(sources.variants.map((source:{id:string})=>source.id),
+    ['vidstuck','videasy','cinesrc','vidlink','cinepro','icefy']);
   assert.equal(providerRequests.length,0);
-  const movie = await post('w32:movie:1',adult.id,'moviebox',true);
-  assert.deepEqual(movieBoxKeywords,['Title','Title','Original Title']);
-  assert.equal(movie.streamType,'mp4');
-  assert.equal(movie.streamUrl,'https://cdn.test/720.mp4?signature=fixture');
-  assert.equal(movie.embedUrl,undefined);
   const episode = await post('w32:tv:1:2:3',adult.id,'cinepro',true);
   assert.equal(episode.streamType,'hls');
   assert.equal(episode.streamUrl,'https://cdn.test/episode.m3u8');
