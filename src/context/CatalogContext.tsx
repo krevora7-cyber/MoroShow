@@ -1,7 +1,7 @@
 import {isGuestProfile,requestSignIn} from '../auth/guest';
 import {catalogJson} from '../player/catalogCache';
 import { apiFetch } from '../player/netshowApi';
-import { vodPreviewPlayback } from '../player/vodPreview';
+import { isVodPreview, vodPreviewPlayback } from '../player/vodPreview';
 /**
  * Catalog Context & Playback Controller
  * 
@@ -169,7 +169,8 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
         body: JSON.stringify({
           contentId: item.id,
           profileId: activeProfile.id,
-          variantId,compatibility:variantId==='shorts-compatible'
+          variantId,compatibility:variantId==='shorts-compatible',
+          ...(item.id.startsWith('w32:') && isVodPreview() ? { directVod: true } : {})
         })
       });
 

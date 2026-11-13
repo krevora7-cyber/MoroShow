@@ -96,7 +96,7 @@ function movieBoxRank(stream: { codecName?: string; resolution?: number } | null
 }
 
 export async function resolveDirectVod(provider: Provider, title: VodTitle): Promise<DirectVod | undefined> {
-  const signal = AbortSignal.timeout(12000);
+  const signal = AbortSignal.timeout(provider.id === 'moviebox' ? 30000 : 12000);
   try {
     if (provider.id === 'moviebox') return await fromMovieBox(provider, title, signal);
     if (provider.id === 'icefy') {

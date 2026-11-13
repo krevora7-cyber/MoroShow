@@ -114,7 +114,7 @@ export function registerWebSources(app:Express){
  if(!/^(w32:|ani:|drama:|short:)/.test(String(req.body.contentId)))return next();try{const p=profile(req);const variantId=String(req.body.variantId||'cinesrc');
  if(String(req.body.contentId).startsWith('short:'))throw new Error('Find this title again in Shorts.');
  if(String(req.body.contentId).startsWith('drama:')){if(p.isKid)throw new Error('No verified Kids rating');const id=String(req.body.contentId),identity=parseDramaIdentity(id),d=await dramaDetails(identity.seriesId);const ep=d.episodes.find(e=>e.id===id);if(!ep)throw new Error('Select an available episode');const prepared=await prepareShort(id,req.socket.localPort!);if(!prepared)throw Error('Episode preparation unavailable');const {source,local}=prepared;let lease=prepared.lease;const compatible=req.body.compatibility===true||prepared.compatible;if(compatible)lease=compatibilityLease(local);return res.json({success:true,token:randomUUID(),streamUrl:lease,streamType:compatible?'hls':source.streamType,subtitles:source.subtitles.map(sub=>({...sub,url:subtitleLease(sub.url)})),variantId:'shorts',variants:[{id:'shorts',label:'Shorts'}],content:ep});}
- const directOptions = directVodOptions();
+ const directOptions = req.body.directVod === true ? directVodOptions() : [];
  const provider = directOptions.find(source => source.id === variantId);
  const embedOptions = EMBED_SERVERS.filter(source => ['vidstuck','videasy','vidlink','cinesrc'].includes(source.id));
  const embed = embedOptions.some(source => source.id === variantId);
