@@ -1,3 +1,4 @@
+import './WebPlayback.css';
 import Artplayer from 'artplayer';
 import { isNativeIOS, nativePlayerEvents, playNative } from '../native/nativePlayer';
 import { resolveMediaUrl } from '../player/netshowApi';
@@ -33,6 +34,7 @@ export const VideoPlayer: React.FC = () => {
   const sourceVariants = orderEmbedVariants(tokenData?.variants || item?.variants || [], false)
     .map((variant, index) => ({ ...variant, label: variant.id.startsWith('demo-') ? variant.label : `Source ${index + 1}` }));
   const isLive = item?.kind === 'live';
+  const styledVod = !!item?.id.startsWith('w32:') && !isNativeIOS();
   const saved = history.find(entry => entry.contentId === item?.id && entry.progressPercent < 95);
   const startAt = activePlayback?.resumeTime ?? saved?.currentTime ?? 0;
 
@@ -151,6 +153,18 @@ export const VideoPlayer: React.FC = () => {
       });
     }
 
+    const seekControls = styledVod ? [-10, 10].map((seconds, index) => ({
+      name: index === 0 ? 'moro-rewind' : 'moro-forward',
+      position: 'left',
+      index: 11 + index,
+      html: `<button type="button" aria-label="${index === 0 ? 'Rewind' : 'Forward'} 10 seconds">${index === 0 ? '↶' : '↷'} 10</button>`,
+      click: () => {
+        const player = artInstanceRef.current;
+        if (player && Number.isFinite(player.duration) && player.duration > 0) {
+          player.currentTime = Math.min(player.duration, Math.max(0, player.currentTime + seconds));
+        }
+      },
+    })) : [];
     const art = new (Artplayer as any)({
       container: artContainerRef.current,
       url: streamUrl,
@@ -175,7 +189,7 @@ export const VideoPlayer: React.FC = () => {
       mutex: true,
       backdrop: true,
       playsInline: true,
-      theme: '#ffffff',
+      theme: styledVod ? '#e50914' : '#ffffff',
       lang: 'en',
       subtitle: subs.length > 0 ? {
         ...(Artplayer as any).option.subtitle,
@@ -190,6 +204,7 @@ export const VideoPlayer: React.FC = () => {
         }
       } : { ...(Artplayer as any).option.subtitle },
       settings: settingsList,
+      controls: seekControls,
       customType: {
         m3u8: (video: HTMLVideoElement, url: string) => {
           if (Hls.isSupported()) {
@@ -344,7 +359,7 @@ export const VideoPlayer: React.FC = () => {
   if (!activePlayback || !item) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col select-none overflow-hidden">
+    <div className={`fixed inset-0 z-50 bg-black flex flex-col select-none overflow-hidden ${styledVod ? 'moro-web-direct' : ''}`}>
       {/* Top Overlay */}
       <div className="absolute top-0 inset-x-0 p-4 sm:p-5 bg-gradient-to-b from-black/85 to-transparent flex items-center justify-between z-30 pointer-events-none">
         <div className="flex items-center gap-3 pointer-events-auto">
@@ -352,13 +367,13 @@ export const VideoPlayer: React.FC = () => {
             type="button"
             aria-label="Exit video player"
             onClick={handleClose}
-            className="p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/15 backdrop-blur-md transition-all"
+            className={styledVod ? 'moro-web-button' : 'p-2.5 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/15 backdrop-blur-md transition-all'}
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-white drop-shadow">{item?.name}</h2>
+              <h2 className="text-base sm:text-lg font-bold text-white drop-shadow">{styledVod ? item.seriesTitle || item.name : item.name}</h2>
               {isLive && (
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-600 text-white text-[10px] font-black uppercase">
                   <Radio className="w-2.5 h-2.5 animate-pulse" />
@@ -366,7 +381,7 @@ export const VideoPlayer: React.FC = () => {
                 </span>
               )}
             </div>
-            <p className="text-xs text-neutral-400">{item?.category}</p>
+            <p className="text-xs text-neutral-400">{styledVod && item.season && item.episode ? `S${item.season} · E${item.episode}` : item.category}</p>
           </div>
         </div>
 

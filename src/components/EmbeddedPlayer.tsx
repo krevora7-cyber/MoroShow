@@ -1,3 +1,4 @@
+import './WebPlayback.css';
 import {createPortal} from 'react-dom';
 import {browserPlayback,type BrowserPlaybackMode} from '../player/browserPlayback';
 import {Capacitor} from '@capacitor/core';
@@ -6,17 +7,21 @@ import {readEmbedProgress} from '../player/embedEvents';
 import {readVidstuckProgress} from '../player/vidstuckProgress';
 import {useProfile} from '../context/ProfileContext';
 import {useEffect,useState,useRef,useMemo} from 'react';
-import {ArrowLeft,RotateCw,Play} from 'lucide-react';
+import {ArrowLeft,RotateCw,Play,Maximize,Minimize} from 'lucide-react';
 import {useCatalog} from '../context/CatalogContext';
 import {useDialog} from './useDialog';
 import {isIOSDevice} from '../player/shortsPresentation';
 import {embedStartUrl,orderEmbedVariants} from '../player/embedPresentation';
-export function EmbeddedPlayer(){const {activePlayback,stopPlayback,startPlayback,playbackLoading,playbackError}=useCatalog();const [retry,setRetry]=useState(0),[help,setHelp]=useState(false);const {recordHistory,history}=useProfile();const frame=useRef<HTMLIFrameElement>(null);const lastSaved=useRef(0);const ref=useDialog(!!activePlayback,stopPlayback);const url=activePlayback?.tokenResponse.embedUrl;
+export function EmbeddedPlayer(){const {activePlayback,stopPlayback,startPlayback,playbackLoading,playbackError}=useCatalog();const [retry,setRetry]=useState(0),[fullscreen,setFullscreen]=useState(false),[fullscreenError,setFullscreenError]=useState('');const {recordHistory,history}=useProfile();const frame=useRef<HTMLIFrameElement>(null);const lastSaved=useRef(0);const ref=useDialog(!!activePlayback,stopPlayback);const url=activePlayback?.tokenResponse.embedUrl;
  const mode:BrowserPlaybackMode='protected';
  const ios=isIOSDevice(navigator);const [started,setStarted]=useState(!ios);const sessionKey=activePlayback?`${activePlayback.catalogItem.id}:${activePlayback.tokenResponse.variantId}:${retry}:${mode}`:null;useEffect(()=>setStarted(!ios),[sessionKey,ios]);
  // Capture resume only on a new session or explicit retry. History saves must never navigate the iframe.
  const playerUrl=useMemo(()=>{if(!url||!activePlayback)return '';const h=history.find(h=>h.contentId===activePlayback.catalogItem.id);try{return embedStartUrl(url,activePlayback.resumeTime??(h&&h.progressPercent<95?h.currentTime:0));}catch{return '';}},[url,activePlayback?.catalogItem.id,activePlayback?.resumeTime,activePlayback?.tokenResponse.variantId,retry]);
- useEffect(()=>{setHelp(false);const t=setTimeout(()=>setHelp(true),18000);return()=>clearTimeout(t);},[url,retry]);
+ useEffect(()=>{
+  const sync=()=>setFullscreen(document.fullscreenElement===ref.current);
+  document.addEventListener('fullscreenchange',sync);
+  return()=>document.removeEventListener('fullscreenchange',sync);
+ },[ref]);
  useEffect(()=>{lastSaved.current=0;const listener=(e:MessageEvent)=>{
  if(!activePlayback||!url||e.source!==frame.current?.contentWindow)return;
  const expectedOrigin=new URL(url).origin;const progress=expectedOrigin==='https://vidstuck.cc'?readVidstuckProgress(e.origin,e.data,activePlayback.catalogItem.id):(mode!=='protected'?readEmbedProgress(e.origin,e.data,expectedOrigin,activePlayback.catalogItem.id):null);if(!progress)return;
@@ -24,7 +29,74 @@ export function EmbeddedPlayer(){const {activePlayback,stopPlayback,startPlaybac
  if(Date.now()-lastSaved.current<5000&&!['pause','ended','seeked'].includes(event))return;lastSaved.current=Date.now();
  void recordHistory({contentId:i.id,name:i.name,kind:i.kind,category:i.category,posterUrl:i.logoUrl,streamUrl:'',streamType:'hls',currentTime:Math.min(time,duration),duration});
  };window.addEventListener('message',listener);return()=>window.removeEventListener('message',listener);},[activePlayback,mode]);
- if(!activePlayback||!url)return null;if(Capacitor.isNativePlatform())return <ProtectedEmbeddedPlayer key={activePlayback.catalogItem.id}/>;let config:ReturnType<typeof browserPlayback>|undefined;try{config=browserPlayback(playerUrl,mode);}catch{}const valid=!!config;let hasAlternative=false;try{browserPlayback(playerUrl,'protected');hasAlternative=true;}catch{}return createPortal(<div ref={ref} className="m-player m-browser-player" role="dialog" aria-modal="true" aria-label="Video player"><style>{`.m-browser-player{position:fixed;inset:0;background:#050505;overflow:hidden}.m-browser-player .m-player-toolbar{position:absolute;z-index:4;top:env(safe-area-inset-top,0px);left:0;right:0;min-height:76px;padding:18px clamp(18px,4vw,52px);background:linear-gradient(180deg,rgba(0,0,0,.88),transparent);display:flex;gap:20px;align-items:center}.m-browser-player .m-player-toolbar>span{font-size:clamp(16px,2vw,22px);font-weight:650;letter-spacing:.01em;color:#fff;text-shadow:0 1px 8px #000}.m-browser-player .m-player-toolbar button{width:44px;height:44px;display:grid;place-items:center;border-radius:50%;background:#ffffff18;border:1px solid #ffffff30;color:white;transition:background .2s,transform .2s}.m-browser-player .m-player-toolbar button:hover{background:#ffffff35;transform:scale(1.05)}.m-browser-player .m-player-servers{position:absolute;z-index:4;top:88px;left:clamp(18px,4vw,52px);display:flex;gap:8px;padding:6px 8px;border:1px solid #ffffff1c;border-radius:999px;background:#1119;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}.m-browser-player .m-player-servers button{padding:9px 16px;border:1px solid #ffffff30;border-radius:999px;background:transparent;color:#eee;font-size:13px;font-weight:600;transition:all .2s}.m-browser-player .m-player-servers button.selected{background:#fff;color:#111;border-color:#fff;box-shadow:0 2px 14px #0008}.m-browser-player iframe{position:absolute;inset:0;width:100%;height:100%;min-height:0;border:0}.m-browser-player .m-player-help{position:absolute;z-index:5;left:50%;bottom:24px;transform:translateX(-50%);width:min(560px,calc(100% - 32px));justify-content:center;align-items:center;gap:12px;padding:12px 18px;border:1px solid #ffffff20;border-radius:14px;background:#111d;color:#f1f1f1;font-size:13px;line-height:1.5;backdrop-filter:blur(16px)}.m-browser-player .m-player-help button{padding:9px 14px;border-radius:9px;background:#fff;color:#111;font-weight:650;white-space:nowrap}.m-browser-player .m-embed-start{position:absolute;inset:0;z-index:3;display:grid;place-content:center;justify-items:center;gap:10px;background:radial-gradient(ellipse at center,#181818,#050505 68%)}.m-browser-player .m-embed-start .m-primary{min-height:54px;padding:0 30px;border-radius:999px;font-size:16px;box-shadow:0 8px 35px #0009}.m-browser-player .m-embed-start p{color:#ccc;font-size:14px;text-align:center}@media(max-width:640px){.m-browser-player .m-player-toolbar{min-height:62px;padding:12px 14px}.m-browser-player .m-player-toolbar button{width:42px;height:42px}.m-browser-player .m-player-servers{top:70px;left:14px;right:14px;justify-content:flex-start;overflow-x:auto;width:max-content;max-width:calc(100% - 28px)}.m-browser-player .m-player-servers button{padding:9px 14px}.m-browser-player .m-player-help{bottom:calc(14px + env(safe-area-inset-bottom,0px));font-size:12px}}`}</style><div className="m-player-toolbar"><button onClick={stopPlayback} aria-label="Back to browsing"><ArrowLeft size={22}/></button><span>{activePlayback.catalogItem.seriesTitle||activePlayback.catalogItem.name}</span><button aria-label="Reload player" onClick={()=>setRetry(v=>v+1)}><RotateCw size={20}/></button></div>{ios&&valid&&orderEmbedVariants(activePlayback.tokenResponse.variants||[],ios).length>1&&<div className="m-player-help"><span>Sound but no picture?</span><button disabled={playbackLoading} onClick={()=>{const variants=orderEmbedVariants(activePlayback.tokenResponse.variants||[],ios);const index=variants.findIndex(v=>v.id===activePlayback.tokenResponse.variantId);const next=variants[(index+1)%variants.length];if(next)void startPlayback(activePlayback.catalogItem,history.find(h=>h.contentId===activePlayback.catalogItem.id)?.currentTime,next.id);}}>Try another server</button></div>}<div className="m-player-servers">{orderEmbedVariants(activePlayback.tokenResponse.variants||[],ios).map((v,n)=><button className={activePlayback.tokenResponse.variantId===v.id?'selected':''} key={v.id} disabled={playbackLoading} onClick={()=>startPlayback(activePlayback.catalogItem,history.find(h=>h.contentId===activePlayback.catalogItem.id)?.currentTime,v.id)}>{`Source ${n+1}`}</button>)}</div>{playbackLoading&&<p role="status" className="m-player-help">Switching server…</p>}{playbackError&&<p role="alert" className="m-player-help">{playbackError}</p>}{help&&valid&&<div className="m-player-help"><span>{'If playback stays black, reload the player or try another title. Audio and subtitles are controlled by the player.'}</span><button aria-label="Dismiss help" onClick={()=>setHelp(false)}>✕</button></div>}{valid&&!started?<div className="m-embed-start"><button className="m-primary" onClick={()=>setStarted(true)}><Play size={22} fill="currentColor"/>Start player</button><p>Tap Play inside the player to start the video.</p></div>:valid?<iframe ref={frame} key={sessionKey} src={config?.url} title={activePlayback.catalogItem.name} allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowFullScreen sandbox={config?.sandbox} referrerPolicy={config?.referrerPolicy}/>:<p>Player address is not supported.</p>}</div>,document.body)}
+ if (!activePlayback || !url) return null;
+ if (Capacitor.isNativePlatform()) return <ProtectedEmbeddedPlayer key={activePlayback.catalogItem.id}/>;
 
+ const { catalogItem, tokenResponse } = activePlayback;
+ const title = catalogItem.seriesTitle || catalogItem.name;
+ const episode = catalogItem.season && catalogItem.episode ? `S${catalogItem.season} · E${catalogItem.episode}` : '';
+ const detail = [episode, episode && catalogItem.name !== title ? catalogItem.name : ''].filter(Boolean).join(' · ');
+ const variants = orderEmbedVariants(tokenResponse.variants || [], ios);
+ let config: ReturnType<typeof browserPlayback> | undefined;
+ try { config = browserPlayback(playerUrl, mode); } catch {}
 
+ async function toggleFullscreen() {
+  setFullscreenError('');
+  try {
+   if (document.fullscreenElement === ref.current) await document.exitFullscreen();
+   else await ref.current?.requestFullscreen();
+  } catch { setFullscreenError('Fullscreen is unavailable.'); }
+ }
 
+ return createPortal(
+  <div ref={ref} className="moro-web-player" role="dialog" aria-modal="true" aria-label="Video player">
+   <header className="moro-web-bar">
+    <button type="button" className="moro-web-button" onClick={stopPlayback} aria-label="Back to browsing" title="Back to browsing">
+     <ArrowLeft size={24}/>
+    </button>
+    <div className="moro-web-heading">
+     <h2>{title}</h2>
+     {detail && <p>{detail}</p>}
+    </div>
+    <div className="moro-web-actions">
+     {variants.length > 1 && <select
+      className="moro-web-source"
+      aria-label="Playback source"
+      disabled={playbackLoading}
+      value={tokenResponse.variantId || ''}
+      onChange={event => void startPlayback(catalogItem, history.find(h => h.contentId === catalogItem.id)?.currentTime, event.target.value)}
+     >
+      {variants.map((variant, index) => <option key={variant.id} value={variant.id}>Source {index + 1}</option>)}
+     </select>}
+     <button type="button" className="moro-web-button" aria-label="Reload player" title="Reload player" onClick={()=>setRetry(n=>n+1)}>
+      <RotateCw size={20}/>
+     </button>
+     {document.fullscreenEnabled && <button
+      type="button" className="moro-web-button"
+      aria-label={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+      title={fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+      onClick={() => void toggleFullscreen()}
+     >
+      {fullscreen ? <Minimize size={22}/> : <Maximize size={22}/>}
+     </button>}
+    </div>
+   </header>
+   <div className="moro-web-stage">
+    {(playbackError || fullscreenError || playbackLoading) && <p className="moro-web-status" role={playbackError || fullscreenError ? 'alert' : 'status'}>
+     {playbackError || fullscreenError || 'Switching source…'}
+    </p>}
+    {config && started ? <iframe
+     ref={frame} key={sessionKey} src={config.url} title={catalogItem.name}
+     allow="autoplay; fullscreen; picture-in-picture; encrypted-media" allowFullScreen
+     sandbox={config.sandbox} referrerPolicy={config.referrerPolicy}
+    /> : <div className="moro-web-start">
+     {config ? <>
+      <button type="button" className="moro-web-button" onClick={() => setStarted(true)}><Play size={20} fill="currentColor"/> Start player</button>
+      <p>Tap Play inside the player to start the video.</p>
+     </> : <p>Player address is not supported.</p>}
+    </div>}
+   </div>
+  </div>,
+  document.body,
+ );
+}

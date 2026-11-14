@@ -1,0 +1,94 @@
+.moro-web-player,
+.moro-web-player:fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+}
+
+.moro-web-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: clamp(12px, 2vw, 26px);
+  padding: max(14px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) 14px max(20px, env(safe-area-inset-left));
+  background: #080808;
+}
+
+.moro-web-heading { flex: 1; min-width: 0; }
+.moro-web-heading h2 {
+  margin: 0;
+  overflow: hidden;
+  font-size: clamp(16px, 2.3vw, 28px);
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.moro-web-heading p { margin: 5px 0 0; color: #c2c2c2; font-size: 13px; }
+
+.moro-web-actions { display: flex; align-items: center; gap: 8px; }
+.moro-web-button,
+.moro-web-source {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-weight: 650;
+}
+.moro-web-button { min-width: 44px; padding: 8px; }
+.moro-web-source { max-width: 132px; padding: 0 8px; background: #202020; font-size: 13px; color-scheme: dark; }
+.moro-web-button:hover, .moro-web-source:hover { background: #303030; }
+.moro-web-button:focus-visible, .moro-web-source:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+.moro-web-stage { position: relative; flex: 1; min-height: 0; }
+.moro-web-stage iframe { display: block; width: 100%; height: 100%; border: 0; }
+.moro-web-status {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  z-index: 2;
+  max-width: calc(100% - 32px);
+  padding: 9px 14px;
+  border-radius: 6px;
+  background: #202020;
+  transform: translateX(-50%);
+}
+.moro-web-start {
+  display: grid;
+  height: 100%;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 16px;
+  text-align: center;
+}
+.moro-web-start p { color: #c2c2c2; }
+.moro-web-start .moro-web-button { gap: 9px; padding: 12px 24px; background: #fff; color: #111; }
+.moro-web-start .moro-web-button:hover { background: #dedede; }
+.moro-web-direct .art-video-player { --art-control-height: 54px; --art-control-icon-size: 24px; }
+.moro-web-direct [class*="art-control-moro-"] button {
+  min-width: 40px;
+  min-height: 44px;
+  color: #fff;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.moro-web-direct [class*="art-control-moro-"] button:focus-visible { outline: 2px solid #fff; outline-offset: -2px; }
+
+@media (max-width: 560px) {
+  .moro-web-bar { flex-wrap: wrap; gap: 6px; padding-inline: 10px; padding-block: 8px; }
+  .moro-web-heading { min-width: 0; }
+  .moro-web-actions { gap: 1px; }
+  .moro-web-button { min-width: 38px; }
+  .moro-web-source { max-width: 93px; padding-inline: 4px; font-size: 12px; }
+  .moro-web-heading p { font-size: 11px; }
+}
