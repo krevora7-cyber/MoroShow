@@ -8,7 +8,7 @@ import {isIOSDevice} from '../player/shortsPresentation';
 import {apiFetch,resolveMediaUrl} from '../player/netshowApi';
 import './LiveTvGuide.css';
 import './WebPlayback.css';
-type Channel={sources?:{id:string;label:string}[];id:string;name:string;category:string;logoUrl?:string;epg?:{title:string;start:string;end:string}[]};
+type Channel={sources?:{id:string;label:string}[];id:string;name:string;category:string;variantIds?:string[];logoUrl?:string;epg?:{title:string;start:string;end:string}[]};
 type Group={id:string;name:string;badge?:string;count?:number};
 const LAST_CHANNEL_KEY = 'moroshow-live:last-channel-v2';
 const PUBLIC_START_CHANNELS = ['Al Jazeera English', 'France 24 English', 'NASA TV'];
@@ -48,8 +48,9 @@ export function LiveTvGuide(){
  const names=[...new Set([last?.name,...(catalogType==='xtream'?IPTV_START_CHANNELS:PUBLIC_START_CHANNELS)])].filter((name):name is string=>!!name);
  const lookups=names.map(async name=>{
    const list=await loadChannels(name);
-   return list.find(channel=>channel.id===last?.id) ??
+   return list.find(channel=>channel.id===last?.id||!!last?.id&&channel.variantIds?.includes(last.id)) ??
      list.find(channel=>channel.name.toLowerCase()===name.toLowerCase()) ??
+     (last?.name===name&&list.length===1 ? list[0] : undefined) ??
      (catalogType==='xtream' && IPTV_START_CHANNELS.includes(name) ? list.find(channel=>new RegExp('(?:^|[^a-z0-9])'+name.toLowerCase()+'(?:$|[^a-z0-9])').test(channel.name.toLowerCase())) : undefined);
  });
  void Promise.allSettled([...lookups,loadChannels().then(items=>items.slice(0,3))]).then(results=>{
@@ -72,7 +73,7 @@ export function LiveTvGuide(){
  const attempt=++playAttempt.current,ac=new AbortController();let engine:Hls|null=null,stopped=false,failed=false,stall:ReturnType<typeof setTimeout>|undefined;
  setConnecting(true);setError('');setLevels([]);setQuality(-1);setPaused(true);
  const current=()=>!stopped&&attempt===playAttempt.current;
- const fail=(message:string)=>{if(!current()||failed)return;failed=true;clearTimeout(stall);setConnecting(false);if(autoRetries.current<Math.min(24,selected.sources?.length||1)-1){autoRetries.current++;setSourceId('');setRetry(x=>x+1);}else {
+ const fail=(message:string)=>{if(!current()||failed)return;failed=true;clearTimeout(stall);setConnecting(false);if(autoRetries.current<Math.min(24,selected.sources?.length||1)-1&&selected.sources?.some(source=>!failedSources.current.includes(source.id))){autoRetries.current++;setSourceId('');setRetry(x=>x+1);}else {
    const next=automatic.current.shift();
    if(next){failedSources.current=[];autoRetries.current=0;setSourceId('');setSelected(next);}
    else setError(message);
@@ -122,7 +123,8 @@ export function LiveTvGuide(){
  const chooseSource=(id:string)=>{automatic.current=[];failedSources.current=[];autoRetries.current=0;setActiveSource('');setSourceId(id);setRetry(n=>n+1);};
  const changeCategory=(id:string)=>{setCategory(id);setPage('');setSearch('');setQuery('');};
  const playPause=()=>{const v=videoRef.current;if(!v||!selected)return;if(v.paused)v.play().catch(()=>setError('Tap Retry to reconnect.'));else v.pause();showControls();};
- const displayChannels=[...channels].sort((a,b)=>sort==='za'?b.name.localeCompare(a.name):sort==='favorites'?Number(favorites.includes(b.id))-Number(favorites.includes(a.id)):a.name.localeCompare(b.name));
+ const favoriteId=(channel:Channel)=>[channel.id,...(channel.variantIds||[])].find(id=>favorites.includes(id));
+ const displayChannels=[...channels].sort((a,b)=>sort==='za'?b.name.localeCompare(a.name):sort==='favorites'?Number(!!favoriteId(b))-Number(!!favoriteId(a)):a.name.localeCompare(b.name));
  const now=selected?.epg?.find(p=>Date.parse(p.start)<=Date.now()&&Date.parse(p.end)>Date.now());
  if(activeProfile?.isKid)return <section className="tv-empty">Live TV is unavailable in Kids profiles.</section>;
  return <section ref={roomRef} className={`tv-room tv-cinema tv-smarters ${drawer?'tv-drawer-open':''}`} aria-label="Moro TV">
@@ -138,7 +140,7 @@ export function LiveTvGuide(){
      <div className="moro-web-actions">
       <span className="tv-live-dot">LIVE</span>
       {!!selected.sources?.length&&<select className="moro-web-source" aria-label="Channel source" value={activeSource||sourceId||selected.sources[0].id} onChange={event=>chooseSource(event.target.value)}>
-       {selected.sources.map((source,index)=><option key={source.id} value={source.id}>Source {index+1}</option>)}
+       {selected.sources.map((source,index)=><option key={source.id} value={source.id}>{source.label||'Source '+(index+1)}</option>)}
       </select>}
       <div className="tv-settings-wrap">
        <button type="button" className="moro-web-button" aria-label="Playback settings" aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(open=>!open)}><Settings size={19}/></button>
@@ -150,7 +152,7 @@ export function LiveTvGuide(){
         </select>
        </div>}
       </div>
-      <button type="button" className="moro-web-button" aria-label={favorites.includes(selected.id)?'Remove favorite':'Add favorite'} onClick={()=>toggleFavorite(selected.id)}><Heart size={19} fill={favorites.includes(selected.id)?'currentColor':'none'}/></button>
+      <button type="button" className="moro-web-button" aria-label={!!favoriteId(selected)?'Remove favorite':'Add favorite'} onClick={()=>toggleFavorite(favoriteId(selected)||selected.id)}><Heart size={19} fill={!!favoriteId(selected)?'currentColor':'none'}/></button>
      </div>
     </header>
     <div className="tv-overlay-bottom"><div className="tv-controls">
@@ -175,7 +177,7 @@ export function LiveTvGuide(){
     <div className="tv-guide-filters"><select aria-label="Sort channels" value={sort} onChange={e=>setSort(e.target.value)}><option value="az">A–Z</option><option value="za">Z–A</option><option value="favorites">Favorites first</option></select><select aria-label="Channel category or country" value={category} onChange={e=>changeCategory(e.target.value)}>{groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}</select></div>
     <div className="tv-list-label"><span>{groups.find(g=>g.id===category)?.name||'Channels'}</span><small>{channels.length}{cursor?'+':''}</small></div>
     <div className="tv-channel-list" aria-label="Channels">
-     {displayChannels.map((c,index)=>{const programme=c.epg?.find(p=>Date.parse(p.start)<=Date.now()&&Date.parse(p.end)>Date.now());const progress=programme?Math.min(100,Math.max(0,(Date.now()-Date.parse(programme.start))/(Date.parse(programme.end)-Date.parse(programme.start))*100)):0;return <div key={c.id} className={`tv-channel ${selected?.id===c.id?'selected':''}`}><button className="tv-channel-select" onClick={()=>choose(c)} aria-pressed={selected?.id===c.id}><span className="tv-row-number">{index+1}</span><span className="tv-row-icon" style={{background:`hsl(${index*47%360} 35% 40%)`}}>{c.logoUrl?<img src={c.logoUrl} alt="" loading="lazy" onError={e=>{e.currentTarget.style.visibility='hidden';}}/>:c.name.slice(0,1)}</span><span className="tv-channel-copy"><strong>{c.name}</strong><small>{programme?`${new Date(programme.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · ${programme.title}`:c.category}</small>{programme&&<span className="tv-programme-progress"><i style={{width:progress+'%'}}/></span>}</span>{favorites.includes(c.id)&&<Heart size={15} fill="currentColor"/>}</button></div>;})}
+     {displayChannels.map((c,index)=>{const programme=c.epg?.find(p=>Date.parse(p.start)<=Date.now()&&Date.parse(p.end)>Date.now());const progress=programme?Math.min(100,Math.max(0,(Date.now()-Date.parse(programme.start))/(Date.parse(programme.end)-Date.parse(programme.start))*100)):0;return <div key={c.id} className={`tv-channel ${selected?.id===c.id?'selected':''}`}><button className="tv-channel-select" onClick={()=>choose(c)} aria-pressed={selected?.id===c.id}><span className="tv-row-number">{index+1}</span><span className="tv-row-icon" style={{background:`hsl(${index*47%360} 35% 40%)`}}>{c.logoUrl?<img src={c.logoUrl} alt="" loading="lazy" onError={e=>{e.currentTarget.style.visibility='hidden';}}/>:c.name.slice(0,1)}</span><span className="tv-channel-copy"><strong>{c.name}</strong><small>{programme?`${new Date(programme.start).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})} · ${programme.title}`:c.category}</small>{programme&&<span className="tv-programme-progress"><i style={{width:progress+'%'}}/></span>}</span>{favoriteId(c)&&<Heart size={15} fill="currentColor"/>}</button></div>;})}
      {loading&&<div className="tv-list-status" role="status"><LoaderCircle size={18} className="tv-spin"/> Loading channels…</div>}
      {listError&&<div className="tv-list-status" role="alert"><p>{listError}</p><button onClick={()=>setListRetry(n=>n+1)}>Try again</button></div>}
      {!loading&&!listError&&!channels.length&&<div className="tv-list-status">{category==='usa'?'No USA channels are currently listed by this provider.':'No channels found in this category.'}</div>}

@@ -39,3 +39,25 @@ test('account media leases keep redirects and playlist resources within the auth
   assert.match(rewritten,/\/api\/live\/media\/[a-f0-9]{48}/);
   assert.doesNotMatch(rewritten,/password/);
 });
+
+test('groups quality variants inside each category and preserves playback for old channel ids', async () => {
+  const account = webTvAccount(JSON.stringify({base:'https://tv.example',username:'user',password:'pass'}), async url =>
+    url.searchParams.get('action') === 'get_live_categories'
+      ? [{category_id:'1',category_name:'Al Kass'},{category_id:'2',category_name:'beIN A'},{category_id:'3',category_name:'beIN G'}]
+      : [
+        ['1','SPORTS: AL KASS 1 FHD'], ['1','SPORTS: AL KASS 1 HD'], ['1','SPORTS: AL KASS 2 FHD'],
+        ['2','BeIN Sport 01 (HEVC)'], ['2','BeIN Sport 1 (1080)'], ['2','Bein sport 1-720'],
+        ['2','BeIN Sport 01 FR'], ['2','beIN MAX 1 HEVC'], ['2','beIN MAX 01 SD'],
+        ['2','FR| BEIN SPORTS MAX4 HD (EVENT ONLY)'], ['2','FR| BEIN SPORTS MAX 4 FHD (EVENT ONLY)'],
+        ['3','Bein sport 1-4K'],
+      ].map(([category_id,name], index) => ({category_id,name,stream_id:String(index+10)})));
+  const channels = [...(await account.catalog()).values()];
+  assert.equal(channels.length, 7);
+  assert.deepEqual(channels[0].sources.map(source => source.label), ['FHD', 'HD']);
+  assert.deepEqual(channels[2].sources.map(source => source.label), ['1080p', '720p', 'HEVC']);
+  assert.deepEqual(channels[4].sources.map(source => source.label), ['SD', 'HEVC']);
+  assert.deepEqual(channels[5].sources.map(source => source.label), ['FHD', 'HD']);
+  assert.equal(channels[5].name, 'FR| BEIN SPORTS MAX4 (EVENT ONLY)');
+  assert.equal(account.channel(channels[2].variantIds![0]), channels[2]);
+  assert.equal(channels[6].category, 'beIN G');
+});

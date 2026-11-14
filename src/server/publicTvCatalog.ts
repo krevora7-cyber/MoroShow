@@ -5,8 +5,8 @@ export const PUBLIC_LISTS=[
  {id:'free-public',name:'Free Public IPTV',url:'https://raw.githubusercontent.com/freecasthub/public-iptv/main/playlist.m3u',website:'https://github.com/freecasthub/public-iptv'},
  {id:'doubo',name:'Doubo',url:'https://cdn.jsdelivr.net/gh/streamline-iptv/iptv-playlists@dist/index.m3u',website:'https://github.com/streamline-iptv/iptv-playlists',license:'CC BY 4.0'},
 ];
-export type Feed={id:string;url:string;provider:string};
-export type PublicChannel={id:string;tvgId:string;name:string;category:string;country:string;language:string;logoUrl?:string;sources:Feed[]};
+export type Feed={id:string;url:string;provider:string;label?:string};
+export type PublicChannel={id:string;tvgId:string;name:string;category:string;country:string;language:string;logoUrl?:string;sources:Feed[];variantIds?:string[];variantNames?:string[]};
 const hash=(s:string)=>createHash('sha256').update(s).digest('hex').slice(0,24);
 const normal=(s:string)=>s.normalize('NFKC').toLowerCase().replace(/\s+/g,' ').trim();
 function clean(s:string){return s.replace(/\[(?:geo.blocked|not 24\/7)\]/ig,'').replace(/\b(?:FHD|UHD|HD|SD|HEVC|H264|H265|\d{3,4}p|4K)\b/ig,'').replace(/\(\s*\)/g,'').replace(/\s+/g,' ').trim();}
