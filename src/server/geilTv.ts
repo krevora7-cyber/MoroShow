@@ -54,15 +54,30 @@ export async function readManifest(url:string,signal:AbortSignal,policy?:OriginP
 }
 export async function probeStream(url:string,signal:AbortSignal,policy?:OriginPolicy){
  let manifest=await readManifest(url,signal,policy);for(let depth=0;depth<3;depth++){
- const lines=manifest.text.split(/\r?\n/);const uri=lines.find(l=>l.trim()&&!l.startsWith('#'));if(!uri)throw new Error('Empty live playlist');
- const next=mediaAddress(uri.trim(),manifest.url,policy).href;
- if(manifest.text.includes('#EXT-X-STREAM-INF:')){manifest=await readManifest(next,signal,policy);continue;}
- // Check media bytes, not just a catalogue entry or an HTTP-200 error page.
- const {response:r}=await upstream(next,signal,'bytes=0-1023',0,policy);try{
- if(![200,206].includes(r.statusCode||0))throw new Error('Segment unavailable');
- const type=String(r.headers['content-type']||'');const first=await r[Symbol.asyncIterator]().next();const data=Buffer.from(first.value||'');
- if(!data.length||/text\/|json/i.test(type)||/^\s*</.test(data.subarray(0,32).toString()))throw new Error('Source returned no video');return;
- }finally{r.destroy();}
+ const segments=manifest.text.split(/\r?\n/).map(line=>line.trim()).filter(line=>line&&!line.startsWith('#'));
+ if(!segments.length)throw new Error('Empty live playlist');
+ if(manifest.text.includes('#EXT-X-STREAM-INF:')){
+   manifest=await readManifest(mediaAddress(segments[0],manifest.url,policy).href,signal,policy);
+   continue;
+ }
+ // The first entry of a sliding live playlist may expire before it is requested.
+ const recent=manifest.text.includes('#EXT-X-ENDLIST')?segments.slice(0,1):segments.slice(-3).reverse();
+ for(const uri of recent){
+   signal.throwIfAborted();
+   const next=mediaAddress(uri,manifest.url,policy).href;
+   try{
+     const segmentSignal=AbortSignal.any([signal,AbortSignal.timeout(4000)]);
+     const {response}=await upstream(next,segmentSignal,'bytes=0-1023',0,policy);
+     try{
+       if(![200,206].includes(response.statusCode||0))continue;
+       const type=String(response.headers['content-type']||'');
+       const first=await response[Symbol.asyncIterator]().next();
+       const data=Buffer.from(first.value||'');
+       if(data.length&&!/text\/|json/i.test(type)&&!/^\s*</.test(data.subarray(0,32).toString()))return;
+     }finally{response.destroy();}
+   }catch{signal.throwIfAborted();}
+ }
+ throw new Error('No recent live segment is available');
  }throw new Error('Nested playlist limit');
 }
 async function resolveChecked(id:string,signal:AbortSignal){

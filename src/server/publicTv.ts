@@ -29,7 +29,8 @@ export function registerPublicTv(app:Express,{accountOnly=false}={}){
  const channel=catalogIndex.get(String(req.body.contentId));if(!channel)return res.status(404).json({success:false,error:'Refresh the channel guide.'});const source=String(req.body.sourceId||'');if(source&&!channel.sources.some(s=>s.id===source))return res.status(400).json({success:false,error:'Unknown source'});const tried=new Set<string>(Array.isArray(req.body.excludeIds)?req.body.excludeIds.filter((s:any)=>typeof s==='string').slice(0,24):[]);const candidates=channel.sources.filter(s=>!tried.has(s.id)).sort((a,b)=>Number(b.id===source)-Number(a.id===source)).slice(0,3);const abort=new AbortController();res.once('close',()=>abort.abort());
  const failed=new Set<string>();
  const policy=privateCatalog?xtream.mediaPolicy():undefined;
- const probe=async(feed:typeof candidates[number])=>{try{const mp4=new URL(feed.url).pathname.toLowerCase().endsWith('.mp4');if(!mp4&&(verified.get(feed.id)||0)<Date.now()){await probeStream(feed.url,AbortSignal.any([abort.signal,AbortSignal.timeout(8000)]),policy);if(verified.size>2000)verified.clear();verified.set(feed.id,Date.now()+60000);}return {feed,mp4};}catch(e){failed.add(feed.id);throw e;}};
+ const probeTimeout=privateCatalog?14000:8000;
+ const probe=async(feed:typeof candidates[number])=>{try{const mp4=new URL(feed.url).pathname.toLowerCase().endsWith('.mp4');if(!mp4&&(verified.get(feed.id)||0)<Date.now()){await probeStream(feed.url,AbortSignal.any([abort.signal,AbortSignal.timeout(probeTimeout)]),policy);if(verified.size>2000)verified.clear();verified.set(feed.id,Date.now()+60000);}return {feed,mp4};}catch(e){failed.add(feed.id);throw e;}};
  try{
   // Explicit choices get priority; automatic fallback races up to three feeds.
   const preferred=source?candidates.find(s=>s.id===source):undefined;
