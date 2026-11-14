@@ -1,3 +1,4 @@
+import {Capacitor} from '@capacitor/core';
 import {catalogJson} from '../player/catalogCache';
 import {useEffect,useRef,useState} from 'react';
 import Hls from 'hls.js';
@@ -10,10 +11,12 @@ import './WebPlayback.css';
 type Channel={sources?:{id:string;label:string}[];id:string;name:string;category:string;logoUrl?:string;epg?:{title:string;start:string;end:string}[]};
 type Group={id:string;name:string;badge?:string;count?:number};
 const LAST_CHANNEL_KEY = 'moroshow-live:last-channel-v2';
-const START_CHANNELS = ['Al Jazeera English', 'France 24 English', 'NASA TV'];
+const PUBLIC_START_CHANNELS = ['Al Jazeera English', 'France 24 English', 'NASA TV'];
+const IPTV_START_CHANNELS = ['al aoula', '2m', 'france 24'];
 const DEFAULT_GROUPS:Group[]=[{id:'all',name:'All channels'}];
 export function LiveTvGuide(){
  const {activeProfile,favorites,toggleFavorite}=useProfile();
+ const catalogType=Capacitor.isNativePlatform()?'public':'xtream';
  const [groups,setGroups]=useState(DEFAULT_GROUPS),[category,setCategory]=useState('all'),[search,setSearch]=useState(''),[query,setQuery]=useState(''),[channels,setChannels]=useState<Channel[]>([]),[cursor,setCursor]=useState<string|null>(null),[page,setPage]=useState(''),[loading,setLoading]=useState(true),[listError,setListError]=useState(''),[listRetry,setListRetry]=useState(0);
  const [sourceId,setSourceId]=useState(''),[activeSource,setActiveSource]=useState(''),[settingsOpen,setSettingsOpen]=useState(false);
  const [categorySearch,setCategorySearch]=useState('');
@@ -27,24 +30,27 @@ export function LiveTvGuide(){
  useEffect(()=>{
  if(!activeProfile||activeProfile.isKid){setLoading(false);return;}const ac=new AbortController();let refreshTimer:ReturnType<typeof setTimeout>|undefined;setLoading(true);setListError('');
  if(!page)setChannels([]);
- const url='/api/live/channels?'+new URLSearchParams({profileId:activeProfile.id,category,search:query,cursor:page})+(listRetry?'&retry='+listRetry:'');
- catalogJson(url).then(d=>{if(ac.signal.aborted)return;setGroups(d.groups?.length?d.groups:DEFAULT_GROUPS);setChannels(old=>page?[...new Map([...old,...d.items].map((c:Channel)=>[c.id,c])).values()]:d.items);setCursor(d.nextCursor==null?null:String(d.nextCursor));if(d.refreshing)refreshTimer=setTimeout(()=>setListRetry(n=>n+1),2500);}).catch(e=>{if(!ac.signal.aborted)setListError(e.message||'Unable to load channels.');}).finally(()=>{if(!ac.signal.aborted)setLoading(false);});
+ const url='/api/live/channels?'+new URLSearchParams({profileId:activeProfile.id,catalog:catalogType,category,search:query,cursor:page})+(listRetry?'&retry='+listRetry:'');
+ catalogJson(url).then(d=>{if(ac.signal.aborted)return;if(catalogType==='xtream'&&d.catalog!=='xtream')throw Error('The IPTV channel list is not configured yet.');setGroups(d.groups?.length?d.groups:DEFAULT_GROUPS);setChannels(old=>page?[...new Map([...old,...d.items].map((c:Channel)=>[c.id,c])).values()]:d.items);setCursor(d.nextCursor==null?null:String(d.nextCursor));if(d.refreshing)refreshTimer=setTimeout(()=>setListRetry(n=>n+1),2500);}).catch(e=>{if(!ac.signal.aborted)setListError(e.message||'Unable to load channels.');}).finally(()=>{if(!ac.signal.aborted)setLoading(false);});
  return()=>{ac.abort();clearTimeout(refreshTimer);};
- },[category,query,page,listRetry,activeProfile?.id,activeProfile?.isKid]);
+ },[category,query,page,listRetry,activeProfile?.id,activeProfile?.isKid,catalogType]);
  useEffect(()=>{
  if(!activeProfile||activeProfile.isKid)return;
  const controller=new AbortController();
+ const historyKey=LAST_CHANNEL_KEY+':'+catalogType;
  let last:{id:string;name:string}|undefined;
- try{last=JSON.parse(localStorage.getItem(LAST_CHANNEL_KEY)||'null')||undefined;}catch{}
+ try{last=JSON.parse(localStorage.getItem(historyKey)||'null')||undefined;}catch{}
  const loadChannels=async(search='')=>{
-   const params=new URLSearchParams({profileId:activeProfile.id,category:'all',search});
-   return (await catalogJson('/api/live/channels?'+params)).items as Channel[];
+   const params=new URLSearchParams({profileId:activeProfile.id,catalog:catalogType,category:'all',search});
+   const result=await catalogJson('/api/live/channels?'+params);
+   return catalogType==='public'||result.catalog==='xtream' ? result.items as Channel[] : [];
  };
- const names=[...new Set([last?.name,...START_CHANNELS])].filter((name):name is string=>!!name);
+ const names=[...new Set([last?.name,...(catalogType==='xtream'?IPTV_START_CHANNELS:PUBLIC_START_CHANNELS)])].filter((name):name is string=>!!name);
  const lookups=names.map(async name=>{
    const list=await loadChannels(name);
    return list.find(channel=>channel.id===last?.id) ??
-     list.find(channel=>channel.name.toLowerCase()===name.toLowerCase());
+     list.find(channel=>channel.name.toLowerCase()===name.toLowerCase()) ??
+     (catalogType==='xtream' && IPTV_START_CHANNELS.includes(name) ? list.find(channel=>new RegExp('(?:^|[^a-z0-9])'+name.toLowerCase()+'(?:$|[^a-z0-9])').test(channel.name.toLowerCase())) : undefined);
  });
  void Promise.allSettled([...lookups,loadChannels().then(items=>items.slice(0,3))]).then(results=>{
    if(controller.signal.aborted||manualChoice.current)return;
@@ -55,7 +61,7 @@ export function LiveTvGuide(){
    setSelected(ordered[0]);
  });
  return()=>controller.abort();
- },[activeProfile?.id,activeProfile?.isKid]);
+ },[activeProfile?.id,activeProfile?.isKid,catalogType]);
  useEffect(()=>{
  const sync=()=>setFullscreen(!!frameRef.current&&document.fullscreenElement===frameRef.current);
  document.addEventListener('fullscreenchange',sync);
@@ -77,12 +83,12 @@ export function LiveTvGuide(){
    setConnecting(true);
    stall??=setTimeout(()=>fail('The channel stopped responding. Retry or choose another version.'),automatic.current.length?10000:20000);
  };
- const playing=()=>{clearStall();if(current()){setConnecting(false);setPaused(false);setError('');automatic.current=[];try{localStorage.setItem(LAST_CHANNEL_KEY,JSON.stringify({id:selected.id,name:selected.name}));}catch{}}};
+ const playing=()=>{clearStall();if(current()){setConnecting(false);setPaused(false);setError('');automatic.current=[];try{localStorage.setItem(LAST_CHANNEL_KEY+':'+catalogType,JSON.stringify({id:selected.id,name:selected.name}));}catch{}}};
  const mediaError=()=>fail('This stream is unavailable or cannot play on this device.');
  video.addEventListener('waiting',wait);video.addEventListener('playing',playing);video.addEventListener('error',mediaError);
  const requestTimer=setTimeout(()=>{if(current()){fail('The provider took too long. Please retry.');ac.abort();}},automatic.current.length?12000:70000);
  (async()=>{try{
- const r=await apiFetch('/api/live/play',{method:'POST',headers:{'Content-Type':'application/json'},signal:ac.signal,body:JSON.stringify({profileId:activeProfile.id,contentId:selected.id,sourceId,excludeIds:failedSources.current})});const d=await r.json();clearTimeout(requestTimer);if(!current())return;failedSources.current=Array.isArray(d.attemptedIds)?d.attemptedIds:failedSources.current;if(!r.ok||!d.success)throw new Error(d.error||'No stream available.');if(!current())return;
+ const r=await apiFetch('/api/live/play',{method:'POST',headers:{'Content-Type':'application/json'},signal:ac.signal,body:JSON.stringify({profileId:activeProfile.id,catalog:catalogType,contentId:selected.id,sourceId,excludeIds:failedSources.current})});const d=await r.json();clearTimeout(requestTimer);if(!current())return;failedSources.current=Array.isArray(d.attemptedIds)?d.attemptedIds:failedSources.current;if(!r.ok||!d.success)throw new Error(d.error||'No stream available.');if(!current())return;
  setActiveSource(d.sourceId||'');
  const url=resolveMediaUrl(d.streamUrl);const play=async()=>{if(!current())return;try{await video.play();}catch(e:any){
  if(!current())return;
@@ -97,7 +103,7 @@ export function LiveTvGuide(){
  else throw new Error('HLS playback is not supported on this browser.');
  }catch(e:any){clearTimeout(requestTimer);if(current()&&!ac.signal.aborted){fail(e.message||'Unable to play this channel.');}}})();
  return()=>{stopped=true;ac.abort();clearTimeout(requestTimer);clearTimeout(stall);video.removeEventListener('waiting',wait);video.removeEventListener('playing',playing);video.removeEventListener('error',mediaError);engine?.destroy();hlsRef.current=null;video.pause();video.removeAttribute('src');video.load();};
- },[selected?.id,retry,sourceId,activeProfile?.id,activeProfile?.isKid]);
+ },[selected?.id,retry,sourceId,activeProfile?.id,activeProfile?.isKid,catalogType]);
  useEffect(()=>()=>clearTimeout(hideTimer.current),[]);
  const showControls=()=>{setControls(true);clearTimeout(hideTimer.current);hideTimer.current=setTimeout(()=>{if(!videoRef.current?.paused)setControls(false);},3500);};
  const toggleFullscreen=async()=>{

@@ -5,6 +5,10 @@
   "installCommand": "npm ci",
   "rewrites": [
     {
+      "source": "/api/live/:path*",
+      "destination": "https://moroshow-xtream-preview.onrender.com/api/live/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://moroshow.onrender.com/api/:path*"
     },
