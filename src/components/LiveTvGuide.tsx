@@ -1,24 +1,29 @@
 import {catalogJson} from '../player/catalogCache';
 import {useEffect,useRef,useState} from 'react';
 import Hls from 'hls.js';
-import {Search,Heart,Play,Pause,Volume2,VolumeX,Maximize,RotateCw,Radio,ChevronDown,ChevronUp,List,X,LoaderCircle,Settings} from 'lucide-react';
+import {Search,Heart,Play,Pause,Volume2,VolumeX,Maximize,Minimize,RotateCw,Radio,ChevronDown,ChevronUp,List,X,LoaderCircle,Settings} from 'lucide-react';
 import {useProfile} from '../context/ProfileContext';
 import {isIOSDevice} from '../player/shortsPresentation';
 import {apiFetch,resolveMediaUrl} from '../player/netshowApi';
 import './LiveTvGuide.css';
+import './WebPlayback.css';
 type Channel={sources?:{id:string;label:string}[];id:string;name:string;category:string;logoUrl?:string;epg?:{title:string;start:string;end:string}[]};
 type Group={id:string;name:string;badge?:string;count?:number};
+const LAST_CHANNEL_KEY = 'moroshow-live:last-channel-v2';
+const START_CHANNELS = ['Al Jazeera English', 'France 24 English', 'NASA TV'];
 const DEFAULT_GROUPS:Group[]=[{id:'all',name:'All channels'}];
 export function LiveTvGuide(){
  const {activeProfile,favorites,toggleFavorite}=useProfile();
  const [groups,setGroups]=useState(DEFAULT_GROUPS),[category,setCategory]=useState('all'),[search,setSearch]=useState(''),[query,setQuery]=useState(''),[channels,setChannels]=useState<Channel[]>([]),[cursor,setCursor]=useState<string|null>(null),[page,setPage]=useState(''),[loading,setLoading]=useState(true),[listError,setListError]=useState(''),[listRetry,setListRetry]=useState(0);
  const [sourceId,setSourceId]=useState(''),[activeSource,setActiveSource]=useState(''),[settingsOpen,setSettingsOpen]=useState(false);
  const [categorySearch,setCategorySearch]=useState('');
+ const [fullscreen,setFullscreen]=useState(false),[fullscreenError,setFullscreenError]=useState('');
+ const automatic=useRef<Channel[]>([]),manualChoice=useRef(false);
  const [drawer,setDrawer]=useState(true);const [sort,setSort]=useState('az');
  const [selected,setSelected]=useState<Channel|null>(null),[retry,setRetry]=useState(0),[connecting,setConnecting]=useState(false),[error,setError]=useState(''),[paused,setPaused]=useState(true),[muted,setMuted]=useState(false),[quality,setQuality]=useState(-1),[levels,setLevels]=useState<{height:number;index:number}[]>([]),[controls,setControls]=useState(true);
  const videoRef=useRef<HTMLVideoElement>(null),frameRef=useRef<HTMLDivElement>(null),roomRef=useRef<HTMLElement>(null),hlsRef=useRef<Hls|null>(null),playAttempt=useRef(0),autoRetries=useRef(0),failedSources=useRef<string[]>([]),hideTimer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
  useEffect(()=>{const t=setTimeout(()=>{setQuery(search.trim());setPage('');},350);return()=>clearTimeout(t);},[search]);
- useEffect(()=>{setSelected(null);failedSources.current=[];autoRetries.current=0;setChannels([]);setCategory('all');setPage('');},[activeProfile?.id]);
+ useEffect(()=>{setSelected(null);automatic.current=[];manualChoice.current=false;failedSources.current=[];autoRetries.current=0;setChannels([]);setCategory('all');setPage('');},[activeProfile?.id]);
  useEffect(()=>{
  if(!activeProfile||activeProfile.isKid){setLoading(false);return;}const ac=new AbortController();let refreshTimer:ReturnType<typeof setTimeout>|undefined;setLoading(true);setListError('');
  if(!page)setChannels([]);
@@ -27,16 +32,55 @@ export function LiveTvGuide(){
  return()=>{ac.abort();clearTimeout(refreshTimer);};
  },[category,query,page,listRetry,activeProfile?.id,activeProfile?.isKid]);
  useEffect(()=>{
+ if(!activeProfile||activeProfile.isKid)return;
+ const controller=new AbortController();
+ let last:{id:string;name:string}|undefined;
+ try{last=JSON.parse(localStorage.getItem(LAST_CHANNEL_KEY)||'null')||undefined;}catch{}
+ const loadChannels=async(search='')=>{
+   const params=new URLSearchParams({profileId:activeProfile.id,category:'all',search});
+   return (await catalogJson('/api/live/channels?'+params)).items as Channel[];
+ };
+ const names=[...new Set([last?.name,...START_CHANNELS])].filter((name):name is string=>!!name);
+ const lookups=names.map(async name=>{
+   const list=await loadChannels(name);
+   return list.find(channel=>channel.id===last?.id) ??
+     list.find(channel=>channel.name.toLowerCase()===name.toLowerCase());
+ });
+ void Promise.allSettled([...lookups,loadChannels().then(items=>items.slice(0,3))]).then(results=>{
+   if(controller.signal.aborted||manualChoice.current)return;
+   const candidates=results.flatMap(result=>result.status==='fulfilled'&&result.value?[result.value].flat():[]);
+   const ordered=[...new Map(candidates.map(channel=>[channel.id,channel])).values()].slice(0,4);
+   if(!ordered.length)return;
+   automatic.current=ordered.slice(1);
+   setSelected(ordered[0]);
+ });
+ return()=>controller.abort();
+ },[activeProfile?.id,activeProfile?.isKid]);
+ useEffect(()=>{
+ const sync=()=>setFullscreen(!!frameRef.current&&document.fullscreenElement===frameRef.current);
+ document.addEventListener('fullscreenchange',sync);
+ return()=>document.removeEventListener('fullscreenchange',sync);
+ },[]);
+ useEffect(()=>{
  const video=videoRef.current;if(!video||!selected||!activeProfile||activeProfile.isKid)return;
  const attempt=++playAttempt.current,ac=new AbortController();let engine:Hls|null=null,stopped=false,failed=false,stall:ReturnType<typeof setTimeout>|undefined;
  setConnecting(true);setError('');setLevels([]);setQuality(-1);setPaused(true);
  const current=()=>!stopped&&attempt===playAttempt.current;
- const fail=(message:string)=>{if(!current()||failed)return;failed=true;clearTimeout(stall);setConnecting(false);if(autoRetries.current<Math.min(24,selected.sources?.length||1)-1){autoRetries.current++;setSourceId('');setRetry(x=>x+1);}else setError(message);};
- const wait=()=>{if(current()){setConnecting(true);clearTimeout(stall);stall=setTimeout(()=>fail('The channel stopped responding. Retry or choose another version.'),20000);}};
- const playing=()=>{clearTimeout(stall);if(current()){setConnecting(false);setPaused(false);setError('');}};
+ const fail=(message:string)=>{if(!current()||failed)return;failed=true;clearTimeout(stall);setConnecting(false);if(autoRetries.current<Math.min(24,selected.sources?.length||1)-1){autoRetries.current++;setSourceId('');setRetry(x=>x+1);}else {
+   const next=automatic.current.shift();
+   if(next){failedSources.current=[];autoRetries.current=0;setSourceId('');setSelected(next);}
+   else setError(message);
+ }};
+ const clearStall=()=>{clearTimeout(stall);stall=undefined;};
+ const wait=()=>{
+   if(!current()||failed)return;
+   setConnecting(true);
+   stall??=setTimeout(()=>fail('The channel stopped responding. Retry or choose another version.'),automatic.current.length?10000:20000);
+ };
+ const playing=()=>{clearStall();if(current()){setConnecting(false);setPaused(false);setError('');automatic.current=[];try{localStorage.setItem(LAST_CHANNEL_KEY,JSON.stringify({id:selected.id,name:selected.name}));}catch{}}};
  const mediaError=()=>fail('This stream is unavailable or cannot play on this device.');
  video.addEventListener('waiting',wait);video.addEventListener('playing',playing);video.addEventListener('error',mediaError);
- const requestTimer=setTimeout(()=>{if(current()){setConnecting(false);fail('The provider took too long. Please retry.');ac.abort();}},70000);
+ const requestTimer=setTimeout(()=>{if(current()){fail('The provider took too long. Please retry.');ac.abort();}},automatic.current.length?12000:70000);
  (async()=>{try{
  const r=await apiFetch('/api/live/play',{method:'POST',headers:{'Content-Type':'application/json'},signal:ac.signal,body:JSON.stringify({profileId:activeProfile.id,contentId:selected.id,sourceId,excludeIds:failedSources.current})});const d=await r.json();clearTimeout(requestTimer);if(!current())return;failedSources.current=Array.isArray(d.attemptedIds)?d.attemptedIds:failedSources.current;if(!r.ok||!d.success)throw new Error(d.error||'No stream available.');if(!current())return;
  setActiveSource(d.sourceId||'');
@@ -45,7 +89,7 @@ export function LiveTvGuide(){
  // Resolving a live feed can outlast the browser's tap activation. Start muted
  // when sound autoplay is denied, then let the viewer enable sound explicitly.
  if(e?.name==='NotAllowedError'&&!video.muted){video.muted=true;setMuted(true);try{await video.play();return;}catch{/* Keep an explicit Play control if autoplay is still denied. */}}
- if(current()){clearTimeout(stall);setConnecting(false);setPaused(true);setControls(true);}
+ if(current()){clearStall();setConnecting(false);setPaused(true);setControls(true);}
  }};wait();
  if(d.streamType==='mp4'){video.src=url;play();}
  else if(video.canPlayType('application/vnd.apple.mpegurl')&&(isIOSDevice(navigator)||!Hls.isSupported())){video.src=url;play();}
@@ -56,31 +100,50 @@ export function LiveTvGuide(){
  },[selected?.id,retry,sourceId,activeProfile?.id,activeProfile?.isKid]);
  useEffect(()=>()=>clearTimeout(hideTimer.current),[]);
  const showControls=()=>{setControls(true);clearTimeout(hideTimer.current);hideTimer.current=setTimeout(()=>{if(!videoRef.current?.paused)setControls(false);},3500);};
- const choose=(c:Channel)=>{setSourceId('');setActiveSource('');autoRetries.current=0;failedSources.current=[];if(selected?.id===c.id)setRetry(n=>n+1);else setSelected(c);showControls();};
- const chooseSource=(id:string)=>{failedSources.current=[];autoRetries.current=0;setSourceId(id);setRetry(n=>n+1);};
+ const toggleFullscreen=async()=>{
+  setFullscreenError('');
+  try{
+   if(document.fullscreenElement===frameRef.current)await document.exitFullscreen();
+   else if(frameRef.current?.requestFullscreen)await frameRef.current.requestFullscreen();
+   else {
+    const video=videoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?:()=>void })|null;
+    if(!video?.webkitEnterFullscreen)throw new Error('Fullscreen unavailable');
+    video.webkitEnterFullscreen();
+   }
+  }catch{setFullscreenError('Fullscreen is unavailable on this device.');}
+ };
+ const choose=(c:Channel)=>{manualChoice.current=true;automatic.current=[];setSourceId('');setActiveSource('');autoRetries.current=0;failedSources.current=[];if(selected?.id===c.id)setRetry(n=>n+1);else setSelected(c);showControls();};
+ const chooseSource=(id:string)=>{automatic.current=[];failedSources.current=[];autoRetries.current=0;setSourceId(id);setRetry(n=>n+1);};
  const changeCategory=(id:string)=>{setCategory(id);setPage('');setSearch('');setQuery('');};
  const playPause=()=>{const v=videoRef.current;if(!v||!selected)return;if(v.paused)v.play().catch(()=>setError('Tap Retry to reconnect.'));else v.pause();showControls();};
  const displayChannels=[...channels].sort((a,b)=>sort==='za'?b.name.localeCompare(a.name):sort==='favorites'?Number(favorites.includes(b.id))-Number(favorites.includes(a.id)):a.name.localeCompare(b.name));
  const now=selected?.epg?.find(p=>Date.parse(p.start)<=Date.now()&&Date.parse(p.end)>Date.now());
  if(activeProfile?.isKid)return <section className="tv-empty">Live TV is unavailable in Kids profiles.</section>;
  return <section ref={roomRef} className={`tv-room tv-cinema tv-smarters ${drawer?'tv-drawer-open':''}`} aria-label="Moro TV">
-  <div className="tv-frame" ref={frameRef} onPointerMove={showControls} onClick={showControls}>
+  <div className="tv-frame moro-web-tv" ref={frameRef} onPointerMove={showControls} onClick={showControls}>
    <video ref={videoRef} playsInline muted={muted} onPause={()=>setPaused(true)} onPlay={()=>{setPaused(false);showControls();}} aria-label={selected?.name||'Moro TV player'}/>
    {!selected&&<div className="tv-idle"><span className="tv-idle-symbol"><Radio size={30}/></span><h1>Moro TV</h1><p>Choose a channel to watch live.</p></div>}
    {connecting&&selected&&<div className="tv-player-message" role="status"><LoaderCircle className="tv-spin" size={28}/><span>Connecting to live…</span></div>}
+   {fullscreenError&&<p className="moro-web-status" role="status" onClick={()=>setFullscreenError('')}>{fullscreenError}</p>}
    {error&&<div className="tv-player-message tv-player-error" role="alert"><p>{error}</p><button onClick={()=>{autoRetries.current=0;failedSources.current=[];setRetry(n=>n+1);}}><RotateCw size={16}/> Retry channel</button></div>}
    {selected&&<div className={`tv-overlay ${controls||paused||error?'shown':''}`}>
-    <div className="tv-overlay-top"><span className="tv-live-dot">LIVE</span><span>{selected.category}</span><button aria-label={favorites.includes(selected.id)?'Remove favorite':'Add favorite'} onClick={()=>toggleFavorite(selected.id)}><Heart size={19} fill={favorites.includes(selected.id)?'currentColor':'none'}/></button></div>
-    <div className="tv-overlay-bottom"><span className="tv-card-kicker">LIVE TELEVISION</span><strong>{selected.name}</strong>{now&&<small>{now.title}</small>}<div className="tv-controls">
+    <header className="moro-web-bar">
+     <div className="moro-web-heading"><h2>{selected.name}</h2>{now&&<p>{now.title}</p>}</div>
+     <div className="moro-web-actions">
+      <span className="tv-live-dot">LIVE</span>
+      <button type="button" className="moro-web-button" aria-label={favorites.includes(selected.id)?'Remove favorite':'Add favorite'} onClick={()=>toggleFavorite(selected.id)}><Heart size={19} fill={favorites.includes(selected.id)?'currentColor':'none'}/></button>
+     </div>
+    </header>
+    <div className="tv-overlay-bottom"><div className="tv-controls">
      <button aria-label={paused?'Play':'Pause'} onClick={playPause}>{paused?<Play size={22}/>:<Pause size={22}/>}</button>
      <button aria-label={muted?'Unmute':'Mute'} onClick={()=>setMuted(!muted)}>{muted?<VolumeX size={21}/>:<Volume2 size={21}/>}</button>
-     <button aria-label="Previous channel" disabled={!channels.length} onClick={()=>{const i=channels.findIndex(c=>c.id===selected.id);choose(channels[(i-1+channels.length)%channels.length]);}}><ChevronUp size={21}/></button>
+     <button aria-label="Previous channel" disabled={!channels.length} onClick={()=>{const i=channels.findIndex(c=>c.id===selected.id);choose(channels[(i<0?channels.length-1:(i-1+channels.length)%channels.length)]);}}><ChevronUp size={21}/></button>
      <button aria-label="Next channel" disabled={!channels.length} onClick={()=>{const i=channels.findIndex(c=>c.id===selected.id);choose(channels[(i+1)%channels.length]);}}><ChevronDown size={21}/></button>
-     <button aria-label="Channels" onClick={()=>setDrawer(d=>!d)}><List size={21}/></button>
+     <button aria-label="Channels" disabled={fullscreen} onClick={()=>setDrawer(d=>!d)}><List size={21}/></button>
      <input className="tv-volume" aria-label="Volume" type="range" min="0" max="1" step="0.05" defaultValue="1" onChange={e=>{if(videoRef.current){videoRef.current.volume=Number(e.target.value);setMuted(Number(e.target.value)===0);}}}/>
-     <span className="tv-live-line"><i/></span><span className="tv-live-caption">LIVE</span>
+     <span className="tv-live-line" aria-hidden="true"><i/></span>
      
-     <button aria-label="Fullscreen" onClick={()=>{if(roomRef.current){if(!document.fullscreenElement)void roomRef.current.requestFullscreen?.().catch(()=>setError('Fullscreen is unavailable on this device.'));else void document.exitFullscreen?.();}}}><Maximize size={21}/></button>
+     <button aria-label={fullscreen?'Exit fullscreen':'Fullscreen'} onClick={()=>void toggleFullscreen()}>{fullscreen?<Minimize size={21}/>:<Maximize size={21}/>}</button>
     </div></div>
    </div>}
   </div>
