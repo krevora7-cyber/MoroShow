@@ -81,12 +81,12 @@ export function LiveTvGuide(){
  const wait=()=>{
    if(!current()||failed)return;
    setConnecting(true);
-   stall??=setTimeout(()=>fail('The channel stopped responding. Retry or choose another version.'),automatic.current.length?10000:20000);
+   stall??=setTimeout(()=>fail('The channel stopped responding. Retry or choose another version.'),20000);
  };
  const playing=()=>{clearStall();if(current()){setConnecting(false);setPaused(false);setError('');automatic.current=[];try{localStorage.setItem(LAST_CHANNEL_KEY+':'+catalogType,JSON.stringify({id:selected.id,name:selected.name}));}catch{}}};
  const mediaError=()=>fail('This stream is unavailable or cannot play on this device.');
  video.addEventListener('waiting',wait);video.addEventListener('playing',playing);video.addEventListener('error',mediaError);
- const requestTimer=setTimeout(()=>{if(current()){fail('The provider took too long. Please retry.');ac.abort();}},automatic.current.length?12000:70000);
+ const requestTimer=setTimeout(()=>{if(current()){fail('The provider took too long. Please retry.');ac.abort();}},automatic.current.length?25000:70000);
  (async()=>{try{
  const r=await apiFetch('/api/live/play',{method:'POST',headers:{'Content-Type':'application/json'},signal:ac.signal,body:JSON.stringify({profileId:activeProfile.id,catalog:catalogType,contentId:selected.id,sourceId,excludeIds:failedSources.current})});const d=await r.json();clearTimeout(requestTimer);if(!current())return;failedSources.current=Array.isArray(d.attemptedIds)?d.attemptedIds:failedSources.current;if(!r.ok||!d.success)throw new Error(d.error||'No stream available.');if(!current())return;
  setActiveSource(d.sourceId||'');
@@ -118,8 +118,8 @@ export function LiveTvGuide(){
    }
   }catch{setFullscreenError('Fullscreen is unavailable on this device.');}
  };
- const choose=(c:Channel)=>{manualChoice.current=true;automatic.current=[];setSourceId('');setActiveSource('');autoRetries.current=0;failedSources.current=[];if(selected?.id===c.id)setRetry(n=>n+1);else setSelected(c);showControls();};
- const chooseSource=(id:string)=>{automatic.current=[];failedSources.current=[];autoRetries.current=0;setSourceId(id);setRetry(n=>n+1);};
+ const choose=(c:Channel)=>{manualChoice.current=true;automatic.current=[];setSourceId('');setActiveSource('');setSettingsOpen(false);autoRetries.current=0;failedSources.current=[];if(selected?.id===c.id)setRetry(n=>n+1);else setSelected(c);showControls();};
+ const chooseSource=(id:string)=>{automatic.current=[];failedSources.current=[];autoRetries.current=0;setActiveSource('');setSourceId(id);setRetry(n=>n+1);};
  const changeCategory=(id:string)=>{setCategory(id);setPage('');setSearch('');setQuery('');};
  const playPause=()=>{const v=videoRef.current;if(!v||!selected)return;if(v.paused)v.play().catch(()=>setError('Tap Retry to reconnect.'));else v.pause();showControls();};
  const displayChannels=[...channels].sort((a,b)=>sort==='za'?b.name.localeCompare(a.name):sort==='favorites'?Number(favorites.includes(b.id))-Number(favorites.includes(a.id)):a.name.localeCompare(b.name));
@@ -132,11 +132,24 @@ export function LiveTvGuide(){
    {connecting&&selected&&<div className="tv-player-message" role="status"><LoaderCircle className="tv-spin" size={28}/><span>Connecting to live…</span></div>}
    {fullscreenError&&<p className="moro-web-status" role="status" onClick={()=>setFullscreenError('')}>{fullscreenError}</p>}
    {error&&<div className="tv-player-message tv-player-error" role="alert"><p>{error}</p><button onClick={()=>{autoRetries.current=0;failedSources.current=[];setRetry(n=>n+1);}}><RotateCw size={16}/> Retry channel</button></div>}
-   {selected&&<div className={`tv-overlay ${controls||paused||error?'shown':''}`}>
+   {selected&&<div className={`tv-overlay ${controls||paused||error||settingsOpen?'shown':''}`}>
     <header className="moro-web-bar">
      <div className="moro-web-heading"><h2>{selected.name}</h2>{now&&<p>{now.title}</p>}</div>
      <div className="moro-web-actions">
       <span className="tv-live-dot">LIVE</span>
+      {!!selected.sources?.length&&<select className="moro-web-source" aria-label="Channel source" value={activeSource||sourceId||selected.sources[0].id} onChange={event=>chooseSource(event.target.value)}>
+       {selected.sources.map((source,index)=><option key={source.id} value={source.id}>Source {index+1}</option>)}
+      </select>}
+      <div className="tv-settings-wrap">
+       <button type="button" className="moro-web-button" aria-label="Playback settings" aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(open=>!open)}><Settings size={19}/></button>
+       {settingsOpen&&<div className="tv-settings-menu" onKeyDown={event=>{if(event.key==='Escape')setSettingsOpen(false);}}>
+        <label htmlFor="tv-quality">Video quality</label>
+        <select id="tv-quality" value={quality} onChange={event=>{const level=Number(event.target.value);setQuality(level);if(hlsRef.current)hlsRef.current.currentLevel=level;}}>
+         <option value={-1}>Auto</option>
+         {levels.map(level=><option key={level.index} value={level.index}>{level.height?level.height+'p':'Stream '+(level.index+1)}</option>)}
+        </select>
+       </div>}
+      </div>
       <button type="button" className="moro-web-button" aria-label={favorites.includes(selected.id)?'Remove favorite':'Add favorite'} onClick={()=>toggleFavorite(selected.id)}><Heart size={19} fill={favorites.includes(selected.id)?'currentColor':'none'}/></button>
      </div>
     </header>
@@ -153,7 +166,6 @@ export function LiveTvGuide(){
     </div></div>
    </div>}
   </div>
-  {selected&&<div className="tv-source-tools"><nav className="tv-sources" aria-label="Channel sources">{selected.sources?.map((source,index)=><button key={source.id} aria-pressed={activeSource===source.id} onClick={()=>chooseSource(source.id)}>Source {index+1}</button>)}</nav><div className="tv-settings-wrap"><button className="tv-source-settings" aria-label="Playback settings" aria-expanded={settingsOpen} onClick={()=>setSettingsOpen(v=>!v)}><Settings size={17}/><span>Settings</span></button>{settingsOpen&&<div className="tv-settings-menu"><label htmlFor="tv-quality">Video quality</label><select id="tv-quality" aria-label="Video quality" value={quality} onChange={e=>{const n=Number(e.target.value);setQuality(n);if(hlsRef.current)hlsRef.current.currentLevel=n;}}><option value={-1}>Auto</option>{levels.map(l=><option key={l.index} value={l.index}>{l.height?l.height+'p':'Stream '+(l.index+1)}</option>)}</select></div>}</div></div>}
   {!drawer&&<button className="tv-open-guide" aria-label="Open channel guide" onClick={()=>setDrawer(true)}><List size={20}/> Channels</button>}
   <div className="tv-browser" hidden={!drawer}>
    <div className="tv-guide-heading"><strong>Channels</strong><button aria-label="Close channel guide" onClick={()=>setDrawer(false)}><X size={20}/></button></div>
