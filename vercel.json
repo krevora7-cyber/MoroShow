@@ -9,6 +9,10 @@
       "destination": "https://moroshow-xtream-preview.onrender.com/api/live/:path*"
     },
     {
+      "source": "/api/shorts-router/:path*",
+      "destination": "https://moroshow-xtream-preview.onrender.com/api/shorts-router/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "https://moroshow.onrender.com/api/:path*"
     },

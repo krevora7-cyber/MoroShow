@@ -1,6 +1,6 @@
 import {supabase} from '../auth/client';
 import {previewEnabled} from './previewMode';
-import {isVodPreview} from './vodPreview';
+import {isVodPreview,isXtreamPreview} from './vodPreview';
 /** Keep one API origin across browser and installed iOS app.
  * In a browser the API is same-origin; a bundled native build MUST configure
  * VITE_NETSHOW_API_BASE=https://your-netshow-backend.example when building.
@@ -39,6 +39,17 @@ export function resolveMediaUrl(value: string): string {
 }
 
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
+  if (isXtreamPreview() && !Capacitor.isNativePlatform()) {
+    const series = /^\/api\/(?:series\/([^/]+)\/episodes|media\/([^/]+)\/artwork)(\?.*)?$/.exec(path);
+    const id = series?.[1] || series?.[2];
+    if (id && decodeURIComponent(id).startsWith('drama:freereels-')) {
+      path = '/api/shorts-router/series/' + id + (series?.[3] || '');
+    } else if (path === '/api/stream/token' && typeof init?.body === 'string' &&
+      String(JSON.parse(init.body).contentId).startsWith('drama:freereels-')) {
+      path = '/api/shorts-router/play';
+    }
+  }
+
   const headers=new Headers(init?.headers);
   if(supabase){const {data}=await supabase.auth.getSession();if(data.session)headers.set('Authorization',`Bearer ${data.session.access_token}`);}
   if(!isVodPreview()&&previewEnabled()&&!supabase)return (await import('./frontendPreview')).previewFetch(path,init);
