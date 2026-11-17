@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import type { CatalogItem } from '../types';
 import { db } from './db';
+import { translateShortsText } from './shortsTranslation';
 import { normalizeSubtitle } from './dramaPlayback';
 
 const apiOrigin = 'https://api.dramarouter.com/api/freereels/';
@@ -40,6 +41,15 @@ function toItem(book: Book, id: string): CatalogItem {
     category: 'Shorts', isKidFriendly: false, logoUrl: image, backdropUrl: image,
     overview: book.desc || '', streamType: 'hls', streamUrl: ''};
 }
+
+async function localizeItems(items: CatalogItem[], lang: 'en' | 'ar') {
+  const values = await translateShortsText(items.flatMap(item => [item.name, item.overview || '']), lang);
+  return items.map((item, index) => ({...item, name: values[index * 2],
+    seriesTitle: values[index * 2], overview: values[index * 2 + 1]}));
+}
+
+const searchTerm = (value: string) => value.trim().replace(/[’‘]/g, "'")
+  .replace(/[^\p{L}\p{M}\p{N} '\-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
 
 export function registerFreeReels(app: Express, key = process.env.DRAMAROUTER_API_KEY) {
   const details = new Map<string, {until: number; value: Promise<Series>}>();
@@ -121,19 +131,30 @@ export function registerFreeReels(app: Express, key = process.env.DRAMAROUTER_AP
 
   app.get(prefix + '/catalog', async (req, res) => {
     try {
-      const lang = req.query.lang === 'id' ? 'id' : 'en';
-      const q = String(req.query.q || '').trim().replace(/[’‘]/g, "'").replace(/[^\p{L}\p{M}\p{N} '\-]/gu, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+      const lang = req.query.lang === 'ar' ? 'ar' : 'en';
+      const originalQuery = searchTerm(String(req.query.q || ''));
       const cursor = String(req.query.cursor || '');
-      if (req.query.q && q.length < 3) return res.json({success: true, items: [], hasMore: false});
+      if (req.query.q && !originalQuery) return res.json({success: true, items: [], hasMore: false});
       if (cursor && !/^offset=\d{1,8}$/.test(cursor)) return res.status(400).json({success: false, error: 'Invalid catalogue page.'});
-      const params: Record<string, string> = q ? {lang, q} : cursor ? {lang, next: cursor} : {lang};
+      const [translatedQuery] = await translateShortsText([originalQuery], 'en');
+      const q = searchTerm(translatedQuery);
+      if (/\p{Script=Arabic}/u.test(q)) {
+        return res.status(502).json({success: false, error: 'ترجمة البحث غير متاحة مؤقتاً. جرّب كتابة العنوان بالإنجليزية.'});
+      }
+      if (q && q.length < 3) return res.json({success: true, items: [], hasMore: false});
+      const params: Record<string, string> = {lang: 'en'};
+      if (q) params.q = q;
+      else if (cursor) params.next = cursor;
       const result = await api<{data?: {items?: Book[]; page_info?: {next?: string; has_more?: boolean}}}>(q ? 'search' : 'for_you', params);
       const items = (result.data?.items || []).flatMap(book => {
         const id = book.key ?? book.id;
         return id && bookIdPattern.test(id) ? [toItem(book, id)] : [];
       });
       const nextCursor = !q && result.data?.page_info?.has_more ? result.data.page_info.next : undefined;
-      return res.json({success: true, items, nextCursor, hasMore: !!nextCursor});
+      const localized = await localizeItems(items, lang);
+      const note = lang === 'ar' && localized.some(item => !/\p{Script=Arabic}/u.test(item.name))
+        ? 'بعض العناوين معروضة بلغتها الأصلية لأن الترجمة غير متاحة مؤقتاً.' : undefined;
+      return res.json({success: true, items: localized, nextCursor, hasMore: !!nextCursor, note});
     } catch (error) {
       return errorResponse(res, error);
     }
@@ -144,9 +165,10 @@ export function registerFreeReels(app: Express, key = process.env.DRAMAROUTER_AP
     if (!identity || identity[2]) return res.status(404).json({success: false, error: 'Series unavailable.'});
     try {
       const info = await detail(identity[1]);
-      const item = toItem(info, identity[1]);
+      const lang = req.query.lang === 'ar' ? 'ar' : 'en';
+      const [item] = await localizeItems([toItem(info, identity[1])], lang);
       const episodes = info.episode_list.flatMap((episode, index) => episode.unlock === true ? [{
-        ...item, id: item.id + ':' + (index + 1), name: 'Episode ' + (index + 1), season: 1, episode: index + 1,
+        ...item, id: item.id + ':' + (index + 1), name: (lang === 'ar' ? 'الحلقة ' : 'Episode ') + (index + 1), season: 1, episode: index + 1,
       }] : []);
       return res.json({success: true, item, episodes, seasons: [1], season: 1,
         posterUrl: item.logoUrl, backdropUrl: item.backdropUrl, overview: item.overview});

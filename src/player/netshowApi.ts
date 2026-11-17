@@ -43,7 +43,11 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
     const series = /^\/api\/(?:series\/([^/]+)\/episodes|media\/([^/]+)\/artwork)(\?.*)?$/.exec(path);
     const id = series?.[1] || series?.[2];
     if (id && decodeURIComponent(id).startsWith('drama:freereels-')) {
-      path = '/api/shorts-router/series/' + id + (series?.[3] || '');
+      const params = new URLSearchParams(series?.[3]);
+      try {
+        if (localStorage.getItem('moroshow-freereels-language') === 'ar') params.set('lang', 'ar');
+      } catch {}
+      path = '/api/shorts-router/series/' + id + '?' + params;
     } else if (path === '/api/stream/token' && typeof init?.body === 'string' &&
       String(JSON.parse(init.body).contentId).startsWith('drama:freereels-')) {
       path = '/api/shorts-router/play';
