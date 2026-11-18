@@ -2,6 +2,7 @@ import './WebPlayback.css';
 import Artplayer from 'artplayer';
 import { isNativeIOS, nativePlayerEvents, playNative } from '../native/nativePlayer';
 import { resolveMediaUrl } from '../player/netshowApi';
+import { matchingSubtitle, readSubtitlePreference, saveSubtitlePreference } from '../player/subtitlePreferences';
 import { orderEmbedVariants } from '../player/embedPresentation';
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
@@ -19,7 +20,7 @@ declare global {
 
 export const VideoPlayer: React.FC = () => {
   const { activePlayback, stopPlayback, liveChannels, startPlayback, playbackLoading, playbackError } = useCatalog();
-  const { recordHistory, history } = useProfile();
+  const { recordHistory, history, activeProfile } = useProfile();
 
   const artContainerRef = useRef<HTMLDivElement>(null);
   const artInstanceRef = useRef<any>(null);
@@ -60,12 +61,13 @@ export const VideoPlayer: React.FC = () => {
     }
   };
 
-  const handleClose = () => {
+  const saveCurrentPosition = () => {
     if (item && !isLive && artInstanceRef.current) {
       const currentTime = Number(artInstanceRef.current.currentTime || 0);
       const duration = Number(artInstanceRef.current.duration || 0);
-      if (duration > 0) {
+      if (duration > 0 && currentTime > 0) {
         void recordHistory({
+          variantId: tokenData?.variantId,
           contentId: item.id,
           name: item.name,
           streamUrl: '',
@@ -78,6 +80,10 @@ export const VideoPlayer: React.FC = () => {
         });
       }
     }
+  };
+
+  const handleClose = () => {
+    saveCurrentPosition();
     destroyEngines();
     stopPlayback();
   };
@@ -85,8 +91,9 @@ export const VideoPlayer: React.FC = () => {
   const handleSourceSelect = (variantId: string) => {
     if (!item || !activePlayback || variantId === tokenData?.variantId) return;
     const resume = !isLive && artInstanceRef.current
-      ? Number(artInstanceRef.current.currentTime || 0)
+      ? Number(artInstanceRef.current.currentTime || startAt)
       : undefined;
+    saveCurrentPosition();
     void startPlayback(item, resume, variantId);
   };
 
@@ -109,6 +116,9 @@ export const VideoPlayer: React.FC = () => {
     const streamUrl = resolveMediaUrl(tokenData.streamUrl);
     const streamType = tokenData.streamType;
     const subs = tokenData.subtitles || [];
+    const preferred = readSubtitlePreference(activeProfile?.id);
+    const selectedLang = matchingSubtitle(preferred, subs);
+    const selectedSub = subs.find(t => t.lang === selectedLang);
     const settingsList: any[] = [];
 
     if (sourceVariants.length > 1) {
@@ -132,16 +142,19 @@ export const VideoPlayer: React.FC = () => {
       settingsList.push({
         width: 200,
         html: 'Subtitles',
-        tooltip: subs[0]?.label || 'On',
+        tooltip: selectedSub?.label || 'Off',
         selector: [
-          { html: 'Off', url: '' },
+          { html: 'Off', url: '', lang:'off', default: !selectedSub },
           ...subs.map((s, idx) => ({
-            default: idx === 0,
+            default: s === selectedSub,
+            lang: s.lang,
             html: s.label || s.lang || `Subtitle ${idx + 1}`,
             url: resolveMediaUrl(s.url)
           }))
         ],
         onSelect: (selected: any) => {
+          saveSubtitlePreference(activeProfile?.id, selected.lang);
+          if (hlsRef.current) hlsRef.current.subtitleTrack = -1;
           if (!selected.url) {
             artInstanceRef.current.subtitle.show = false;
           } else {
@@ -191,9 +204,9 @@ export const VideoPlayer: React.FC = () => {
       playsInline: true,
       theme: styledVod ? '#e50914' : '#ffffff',
       lang: 'en',
-      subtitle: subs.length > 0 ? {
+      subtitle: selectedSub ? {
         ...(Artplayer as any).option.subtitle,
-        url: resolveMediaUrl(subs[0].url),
+        url: resolveMediaUrl(selectedSub.url),
         type: 'vtt',
         encoding: 'utf-8',
         escape: true,
@@ -246,7 +259,10 @@ export const VideoPlayer: React.FC = () => {
             });
             hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED,(_,data)=>{
               if(!data.subtitleTracks.length)return;
-              const option={name:'embedded-subtitles',html:'Embedded subtitles',selector:[{html:'Off',track:-1},...data.subtitleTracks.map((t,i)=>({html:t.name||t.lang||`Subtitle ${i+1}`,track:i}))],onSelect:(v:any)=>{hls.subtitleTrack=v.track;return v.html;}};
+              const preference = readSubtitlePreference(activeProfile?.id);
+              const language = matchingSubtitle(preference, data.subtitleTracks.map(t=>({lang:t.lang||''})));
+              hls.subtitleTrack = selectedSub || language==='off' ? -1 : data.subtitleTracks.findIndex(t=>t.lang===language);
+              const option={name:'embedded-subtitles',html:'Embedded subtitles',selector:[{html:'Off',track:-1},...data.subtitleTracks.map((t,i)=>({html:t.name||t.lang||`Subtitle ${i+1}`,track:i}))],onSelect:(v:any)=>{hls.subtitleTrack=v.track;saveSubtitlePreference(activeProfile?.id,data.subtitleTracks[v.track]?.lang||'off');art.subtitle.show=false;return v.html;}};
               if(art.setting.find('embedded-subtitles'))art.setting.update(option);else art.setting.add(option);
             });
             hls.on(Hls.Events.ERROR, (_, data) => {
@@ -317,7 +333,16 @@ export const VideoPlayer: React.FC = () => {
         const closed = await nativePlayerEvents.addListener('closed', () => {
           if (!cancelled) stopPlayback();
         });
+        if (cancelled) { await closed.remove(); return; }
         listeners.push(closed);
+        const progress = await nativePlayerEvents.addListener('progress', ({currentTime, duration}) => {
+          if (!cancelled && !isLive && currentTime > 0 && duration > 0) void recordHistory({
+            contentId:item.id, name:item.name, kind:item.kind, category:item.category, posterUrl:item.logoUrl,
+            streamType:tokenData.streamType, variantId:tokenData.variantId, currentTime, duration
+          });
+        });
+        if (cancelled) { await progress.remove(); return; }
+        listeners.push(progress);
         await playNative({
           url: resolveMediaUrl(tokenData.streamUrl),
           title: item.name,
@@ -339,8 +364,9 @@ export const VideoPlayer: React.FC = () => {
     if (!item || isLive) return;
     const interval = setInterval(() => {
       const art = artInstanceRef.current;
-      if (art && art.playing && Number(art.duration) > 0) {
+      if (art && art.playing && Number(art.currentTime) > 0 && Number(art.duration) > 0) {
         void recordHistory({
+          variantId: tokenData?.variantId,
           contentId: item.id,
           name: item.name,
           streamUrl: '',
@@ -354,7 +380,7 @@ export const VideoPlayer: React.FC = () => {
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [item?.id, isLive]);
+  }, [item?.id, isLive, tokenData?.token]);
 
   if (!activePlayback || !item) return null;
 

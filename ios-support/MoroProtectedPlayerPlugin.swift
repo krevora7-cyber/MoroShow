@@ -3,11 +3,23 @@ import WebKit
 import AVFoundation
 import Capacitor
 
-private let playerHosts:Set<String>=["player.cinezo.live","vidsrc.mov","vidlink.pro","vidsrc.sh"]
-private let reservedHosts=["cinezo.live","vidsrc.mov","vidlink.pro","vidsrc.sh","dramatip.net","vercel.app","supabase.co","themoviedb.org","tmdb.org","trycloudflare.com","localhost"]
+private let playerHosts:Set<String>=["player.cinezo.live","vidsrc.mov","vidlink.pro","vixsrc.to","cinesrc.st","vidstuck.cc","player.videasy.ws","vidsrc.sh"]
+private let reservedHosts=["cinezo.live","vidsrc.mov","vidlink.pro","vixsrc.to","cinesrc.st","vidstuck.cc","player.videasy.ws","vidsrc.sh","dramatip.net","vercel.app","supabase.co","themoviedb.org","tmdb.org","trycloudflare.com","localhost"]
 private func allowedPlayer(_ url:URL)->Bool { url.scheme?.lowercased()=="https" && url.user==nil && url.password==nil && (url.port==nil || url.port==443) && playerHosts.contains(url.host?.lowercased() ?? "") }
 private final class ProtectedPlayerScreen:UIViewController,WKNavigationDelegate,WKUIDelegate {
  var sources:[(String,URL)]=[];var selected=0;var ruleList:WKContentRuleList?;var onClose:(()->Void)?
+ var choices:[String]=[];var currentChoice=0;var switchTo:Int?;var onProgress:((Double,Double)->Void)?
+ private var timer:Timer?;private var lastTime:Double = -1
+ private func sample(){
+  guard let web=web,web.url==sources[selected].1 else{return}
+  let expected=web.url?.absoluteString
+  web.evaluateJavaScript("(()=>{const v=document.querySelector('video');return v?[location.href,v.currentTime,v.duration]:null})()"){[weak self] result,_ in
+   guard let self=self,!self.closed,let data=result as? [Any],data.count==3,
+    let page=data[0] as? String,page==expected,let time=data[1] as? Double,let duration=data[2] as? Double,
+    time>0,time<=duration,duration<=86400,time != self.lastTime else{return}
+   self.lastTime=time;self.onProgress?(time,duration)
+  }
+ }
  private var web:WKWebView?;private let status=UILabel();private var closed=false
  override func viewDidLoad(){
   super.viewDidLoad();view.backgroundColor = .black
@@ -19,17 +31,19 @@ private final class ProtectedPlayerScreen:UIViewController,WKNavigationDelegate,
   let reload=UIButton(type:.system);reload.setTitle("Reload",for:.normal);reload.addTarget(self,action:#selector(reloadPlayer),for:.touchUpInside);bar.addArrangedSubview(reload);bar.heightAnchor.constraint(greaterThanOrEqualToConstant:48).isActive=true;stack.addArrangedSubview(bar)
   let scroll=UIScrollView();let switches=UIStackView();switches.spacing=16;switches.translatesAutoresizingMaskIntoConstraints=false;scroll.addSubview(switches)
   NSLayoutConstraint.activate([switches.leadingAnchor.constraint(equalTo:scroll.contentLayoutGuide.leadingAnchor),switches.trailingAnchor.constraint(equalTo:scroll.contentLayoutGuide.trailingAnchor),switches.topAnchor.constraint(equalTo:scroll.contentLayoutGuide.topAnchor),switches.bottomAnchor.constraint(equalTo:scroll.contentLayoutGuide.bottomAnchor),switches.heightAnchor.constraint(equalTo:scroll.frameLayoutGuide.heightAnchor),scroll.heightAnchor.constraint(equalToConstant:48)])
-  for(index,source) in sources.enumerated(){let button=UIButton(type:.system);button.setTitle(source.0,for:.normal);button.tag=index;button.addTarget(self,action:#selector(switchSource(_:)),for:.touchUpInside);switches.addArrangedSubview(button)};stack.addArrangedSubview(scroll)
+  let labels=choices.isEmpty ? sources.map{$0.0} : choices
+  for(index,label) in labels.enumerated(){let button=UIButton(type:.system);button.setTitle(label,for:.normal);button.isEnabled=choices.isEmpty || index != currentChoice;button.tag=index;button.addTarget(self,action:#selector(switchSource(_:)),for:.touchUpInside);switches.addArrangedSubview(button)};stack.addArrangedSubview(scroll)
   let config=WKWebViewConfiguration();config.allowsInlineMediaPlayback=true;config.allowsPictureInPictureMediaPlayback=true;config.mediaTypesRequiringUserActionForPlayback = .all;config.websiteDataStore = .nonPersistent()
   if let list=ruleList{config.userContentController.add(list)}
   // Separate from Capacitor: no account bridge or script message handlers.
   let web=WKWebView(frame:.zero,configuration:config);self.web=web;web.navigationDelegate=self;web.uiDelegate=self;web.isOpaque=false;web.backgroundColor = .black;stack.addArrangedSubview(web);web.load(URLRequest(url:sources[selected].1))
+  if onProgress != nil{timer=Timer.scheduledTimer(withTimeInterval:3,repeats:true){[weak self] _ in self?.sample()}}
   try? AVAudioSession.sharedInstance().setCategory(.playback,mode:.moviePlayback)
  }
  @objc private func reloadPlayer(){web?.reload()}
- @objc private func switchSource(_ button:UIButton){selected=button.tag;status.text=title;web?.stopLoading();web?.load(URLRequest(url:sources[selected].1))}
+ @objc private func switchSource(_ button:UIButton){if !choices.isEmpty{switchTo=button.tag;closePlayer();return};selected=button.tag;status.text=title;web?.stopLoading();web?.load(URLRequest(url:sources[selected].1))}
  @objc private func closePlayer(){dismiss(animated:true){self.finish()}}
- func finish(){guard !closed else{return};closed=true;web?.stopLoading();web?.loadHTMLString("",baseURL:nil);web?.navigationDelegate=nil;web?.uiDelegate=nil;web?.removeFromSuperview();web=nil;onClose?();onClose=nil}
+ func finish(){guard !closed else{return};closed=true;timer?.invalidate();timer=nil;web?.stopLoading();web?.loadHTMLString("",baseURL:nil);web?.navigationDelegate=nil;web?.uiDelegate=nil;web?.removeFromSuperview();web=nil;onClose?();onClose=nil}
  override func viewDidDisappear(_ animated:Bool){super.viewDidDisappear(animated);if isBeingDismissed{finish()}}
  func webView(_ webView:WKWebView,createWebViewWith configuration:WKWebViewConfiguration,for navigationAction:WKNavigationAction,windowFeatures:WKWindowFeatures)->WKWebView?{nil}
  func webView(_ webView:WKWebView,decidePolicyFor navigationAction:WKNavigationAction,decisionHandler:@escaping(WKNavigationActionPolicy)->Void){guard let target=navigationAction.targetFrame else{decisionHandler(.cancel);return};if target.isMainFrame{guard let url=navigationAction.request.url,allowedPlayer(url) else{decisionHandler(.cancel);return}};decisionHandler(.allow)}
@@ -41,7 +55,7 @@ public class MoroProtectedPlayerPlugin:CAPPlugin,CAPBridgedPlugin {
  public let pluginMethods:[CAPPluginMethod]=[CAPPluginMethod(name:"open",returnType:CAPPluginReturnPromise),CAPPluginMethod(name:"close",returnType:CAPPluginReturnPromise)]
  private var screen:ProtectedPlayerScreen?;private var preparing=false;private var generation=0
  @objc func open(_ call:CAPPluginCall){
-  guard let raw=call.getArray("sources",JSObject.self),!raw.isEmpty,raw.count<=4,let hosts=call.getArray("blockedHosts",String.self),hosts.count<=2000 else{call.reject("Invalid player options");return}
+  guard let raw=call.getArray("sources",JSObject.self),!raw.isEmpty,raw.count<=8,let hosts=call.getArray("blockedHosts",String.self),hosts.count<=2000 else{call.reject("Invalid player options");return}
   var sources:[(String,URL)]=[]
   for source in raw{guard let address=source["url"] as? String,let url=URL(string:address),allowedPlayer(url) else{call.reject("Unsupported player address");return};sources.append((source["label"] as? String ?? "Server",url))}
   var rules:[[String:Any]]=[]
@@ -55,7 +69,11 @@ public class MoroProtectedPlayerPlugin:CAPPlugin,CAPBridgedPlugin {
     guard self.generation==generation else{call.resolve(["closed":true]);return};self.preparing=false
     guard let presenter=self.bridge?.viewController,presenter.presentedViewController==nil else{call.reject("Player cannot be presented right now");return}
     let screen=ProtectedPlayerScreen();screen.sources=sources;screen.selected=max(0,min(call.getInt("selected") ?? 0,sources.count-1));screen.title=call.getString("title") ?? "MoroShow";screen.ruleList=list;screen.modalPresentationStyle = .fullScreen
-    screen.onClose={ [weak self] in self?.screen=nil;call.resolve(["closed":true]) };self.screen=screen;presenter.present(screen,animated:true)
+    screen.choices=Array((call.getArray("choices",String.self) ?? []).prefix(12));screen.currentChoice=call.getInt("selected") ?? 0
+    if let session=call.getString("session"){screen.onProgress={ [weak self] time,duration in self?.notifyListeners("progress",data:["session":session,"currentTime":time,"duration":duration]) }}
+    screen.onClose={ [weak self,weak screen] in
+     var result:[String:Any]=["closed":true];if let next=screen?.switchTo{result["switchTo"]=next};self?.screen=nil;call.resolve(result)
+    };self.screen=screen;presenter.present(screen,animated:true)
    }
    if !(call.getBool("protectionEnabled") ?? true) || rules.isEmpty{present(nil);return}
    guard let bytes=try? JSONSerialization.data(withJSONObject:rules),let json=String(data:bytes,encoding:.utf8) else{self.preparing=false;call.reject("Invalid content rules");return}

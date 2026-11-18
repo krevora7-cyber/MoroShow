@@ -229,9 +229,13 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const isFavorite = (contentId: string) => favorites.includes(contentId);
 
+  const historyWrites = useRef(new Map<string, Promise<void>>());
   const recordHistory = async (item: Partial<WatchHistoryItem> & { contentId: string; currentTime: number; duration: number }) => {
     if (!activeProfile||isGuestProfile(activeProfile.id)) return;
-    try {
+    if (!Number.isFinite(item.currentTime) || !Number.isFinite(item.duration) || item.currentTime < 0 || item.duration <= 0) return;
+    const profileId = activeProfile.id;
+    const previous = historyWrites.current.get(profileId);
+    const write = async () => {
       const saved = await apiFetch(`/api/profiles/${activeProfile.id}/history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -239,7 +243,7 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
         keepalive:true
       });
       if(!saved.ok)throw new Error('Watch progress could not be saved');
-      // Update local state only after a confirmed save
+      if (currentProfileId.current !== profileId) return;
       setHistory(prev => {
         const filtered = prev.filter(h => h.contentId !== item.contentId);
         const progressPercent = item.duration > 0 ? Math.min(100, Math.round((item.currentTime / item.duration) * 100)) : 0;
@@ -254,15 +258,18 @@ export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children })
             posterUrl: item.posterUrl,
             currentTime: item.currentTime,
             duration: item.duration,
+            variantId: item.variantId,
             progressPercent,
             updatedAt: Date.now()
           },
           ...filtered
         ];
       });
-    } catch (e) {
-      console.warn('Failed to record watch history', e);
-    }
+    };
+    const pending = (previous ?? Promise.resolve()).then(write).catch(e => console.warn('Failed to record watch history', e));
+    historyWrites.current.set(profileId, pending);
+    await pending;
+    if (historyWrites.current.get(profileId) === pending) historyWrites.current.delete(profileId);
   };
 
   return (

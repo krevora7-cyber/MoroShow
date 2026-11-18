@@ -88,7 +88,7 @@ app.get('/api/profiles/:id/history', (req: Request, res: Response) => {
 
 app.post('/api/profiles/:id/history', (req: Request, res: Response) => {
   const { id } = req.params;
-  const { contentId, name, streamType, kind, category, posterUrl, currentTime, duration } = req.body;
+  const { contentId, name, streamType, kind, category, posterUrl, currentTime, duration, variantId } = req.body;
   if (!contentId || currentTime === undefined) {
     return res.status(400).json({ success: false, error: 'Invalid history payload' });
   }
@@ -101,6 +101,7 @@ app.post('/api/profiles/:id/history', (req: Request, res: Response) => {
     kind: kind || 'movie',
     category: category || 'General',
     posterUrl,
+    variantId: typeof variantId === 'string' && /^[a-z0-9-]{1,48}$/.test(variantId) ? variantId : undefined,
     currentTime: Math.floor(currentTime),
     duration: Math.floor(duration || 0),
     progressPercent,

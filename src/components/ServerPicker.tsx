@@ -5,12 +5,11 @@ import { useProfile } from '../context/ProfileContext';
 import { orderEmbedVariants } from '../player/embedPresentation';
 import { apiFetch } from '../player/netshowApi';
 import { isIOSDevice } from '../player/shortsPresentation';
-import { isVodPreview } from '../player/vodPreview';
 import type { StreamTokenResponse } from '../types';
 import { useDialog } from './useDialog';
 
 type Variant = { id: string; label: string };
-const embedded = ['vidstuck', 'videasy', 'cinesrc', 'vidlink'].map(id => ({ id, label: '' }));
+const embedded = ['vidstuck', 'videasy', 'cinesrc', 'vidlink', 'vixsrc'].map(id => ({ id, label: '' }));
 const directLabels: Record<string, string> = { cinepro: 'CinePro', icefy: 'Icefy · HLS' };
 const shortLabels: Record<string, string> = { dramabox: 'DramaBox', goodshort: 'GoodShort', reelshort: 'ReelShort' };
 
@@ -23,7 +22,7 @@ export function ServerPicker() {
   const ref = useDialog(!!pendingPlayback, close);
   const contentId = pendingPlayback?.id;
   const profileId = activeProfile?.id;
-  const preview = isVodPreview() && !!contentId?.startsWith('w32:');
+  const preview = !!contentId?.startsWith('w32:');
   const key = JSON.stringify([contentId, profileId, attempt]);
 
   useEffect(() => {

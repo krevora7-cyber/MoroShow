@@ -49,6 +49,7 @@ export interface CatalogItem {
 }
 
 export interface WatchHistoryItem {
+  variantId?: string;
   contentId: string;
   name: string;
   streamUrl: string;

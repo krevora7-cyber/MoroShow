@@ -1,7 +1,6 @@
 import {isGuestProfile,requestSignIn} from '../auth/guest';
 import {catalogJson} from '../player/catalogCache';
 import { apiFetch } from '../player/netshowApi';
-import { isVodPreview } from '../player/vodPreview';
 /**
  * Catalog Context & Playback Controller
  * 
@@ -57,7 +56,7 @@ interface CatalogContextType {
 const CatalogContext = createContext<CatalogContextType | undefined>(undefined);
 
 export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { activeProfile } = useProfile();
+  const { activeProfile, history } = useProfile();
 
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -138,17 +137,17 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   const startPlayback = async (item: CatalogItem, resumeTime?: number, variantId?: string) => {
     if (!activeProfile) return;
+    if (item.id.startsWith('w32:') && resumeTime === undefined) {
+      const entry = history.find(h => h.contentId === item.id && h.currentTime > 0 && h.progressPercent < 95);
+      if (entry) { resumeTime = entry.currentTime; variantId ??= entry.variantId; }
+    }
     if(item.id.startsWith('iptv:')&&(!variantId||variantId==='vidlink'))variantId='auto';
     if(!variantId&&item.id.startsWith('drama:'))variantId='shorts';
     if (!variantId && item.id.startsWith('w32:')) {
-      if (isVodPreview()) {
-        stopPlayback();
-        setPendingResumeTime(resumeTime);
-        setPendingPlayback(item);
-        return;
-      }
-      variantId = 'cinesrc';
+      stopPlayback();
+      setPendingResumeTime(resumeTime);
       setPendingPlayback(item);
+      return;
     }
     if(!variantId){setPlaybackError(null);setPendingPlayback(item);return;}
 
@@ -173,7 +172,7 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
           contentId: item.id,
           profileId: activeProfile.id,
           variantId,compatibility:variantId==='shorts-compatible',
-          ...(item.id.startsWith('w32:') && isVodPreview() ? { directVod: true } : {})
+          ...(item.id.startsWith('w32:') ? { directVod: true } : {})
         })
       });
 
@@ -181,6 +180,10 @@ export const CatalogProvider: React.FC<{ children: ReactNode }> = ({ children })
       if(playbackRequest.current!==controller)return;
       if (!data.success) {
         setPlaybackError(data.error || 'Failed to authorize stream');
+        if (!activePlayback && item.id.startsWith('w32:')) {
+          setPendingResumeTime(resumeTime);
+          setPendingPlayback(item);
+        }
         return;
       }
 

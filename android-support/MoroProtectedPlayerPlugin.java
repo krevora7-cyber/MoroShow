@@ -14,12 +14,29 @@ import java.util.*;
 @CapacitorPlugin(name="MoroProtectedPlayer")
 public class MoroProtectedPlayerPlugin extends Plugin {
  private Dialog dialog;private WebView player;private PluginCall pending;private View customView;private WebChromeClient.CustomViewCallback fullscreenCallback;private FrameLayout videoContainer;
+
+ private final android.os.Handler clock=new android.os.Handler(android.os.Looper.getMainLooper());
+ private String session,expectedPage;private Integer switchTo;private double previousTime;
+ private final Runnable tick=new Runnable(){public void run(){if(player!=null){sample();clock.postDelayed(this,3000);}}};
+ private void sample(){
+  final WebView view=player;final String id=session;
+  if(id==null||view==null||!expectedPage.equals(view.getUrl()))return;
+  view.evaluateJavascript("(()=>{const v=document.querySelector('video');return v?[location.href,v.currentTime,v.duration]:null})()",value->{
+   if(view!=player||!id.equals(session))return;
+   try{JSONArray data=new JSONArray(value);
+    if(!expectedPage.equals(data.getString(0)))return;
+    double time=data.getDouble(1),duration=data.getDouble(2);
+    if(time>0&&time<=duration&&duration<=86400&&time!=previousTime){previousTime=time;
+     notifyListeners("progress",new JSObject().put("session",id).put("currentTime",time).put("duration",duration));}
+   }catch(JSONException ignored){}
+  });
+ }
  @PluginMethod public void open(PluginCall call){
   JSArray sources=call.getArray("sources"),hosts=call.getArray("blockedHosts");final List<String> urls=new ArrayList<>(),labels=new ArrayList<>(),rules=new ArrayList<>();final PlaybackPolicy policy;
-  try{if(sources==null||sources.length()==0||sources.length()>4||hosts==null)throw new Exception("Missing playback options");for(int i=0;i<sources.length();i++){JSONObject source=sources.getJSONObject(i);String url=source.getString("url");if(!PlaybackPolicy.allowedPage(url))throw new Exception("Unsupported player address");urls.add(url);labels.add(source.optString("label","Server "+(i+1)));}for(int i=0;i<hosts.length();i++)rules.add(hosts.getString(i));policy=new PlaybackPolicy(rules);}catch(Exception e){call.reject(e.getMessage());return;}
+  try{if(sources==null||sources.length()==0||sources.length()>8||hosts==null)throw new Exception("Missing playback options");for(int i=0;i<sources.length();i++){JSONObject source=sources.getJSONObject(i);String url=source.getString("url");if(!PlaybackPolicy.allowedPage(url))throw new Exception("Unsupported player address");urls.add(url);labels.add(source.optString("label","Server "+(i+1)));}for(int i=0;i<hosts.length();i++)rules.add(hosts.getString(i));policy=new PlaybackPolicy(rules);}catch(Exception e){call.reject(e.getMessage());return;}
   final boolean filtering=call.getBoolean("protectionEnabled",true);
   getActivity().runOnUiThread(()->{
-   if(dialog!=null){call.reject("Close the current player first");return;}pending=call;dialog=new Dialog(getActivity(),android.R.style.Theme_Material_NoActionBar);
+   if(dialog!=null){call.reject("Close the current player first");return;}pending=call;session=call.getString("session");switchTo=null;previousTime=-1;dialog=new Dialog(getActivity(),android.R.style.Theme_Material_NoActionBar);
    LinearLayout layout=new LinearLayout(getActivity());layout.setOrientation(LinearLayout.VERTICAL);layout.setBackgroundColor(Color.BLACK);
    LinearLayout toolbar=new LinearLayout(getActivity());toolbar.setGravity(Gravity.CENTER_VERTICAL);
    Button close=new Button(getActivity());close.setText("Back");close.setOnClickListener(v->dismiss());toolbar.addView(close);
@@ -38,15 +55,19 @@ public class MoroProtectedPlayerPlugin extends Plugin {
     @Override public void onShowCustomView(View view,CustomViewCallback callback){if(customView!=null){callback.onCustomViewHidden();return;}customView=view;fullscreenCallback=callback;videoContainer.addView(view,new FrameLayout.LayoutParams(-1,-1));}
     @Override public void onHideCustomView(){leaveFullscreen();}
    });
-   for(int i=0;i<urls.size();i++){final String url=urls.get(i);Button button=new Button(getActivity());button.setText(labels.get(i));button.setOnClickListener(v->{leaveFullscreen();player.stopLoading();player.loadUrl(url);title.setText(call.getString("title","MoroShow"));});switches.addView(button);}
+   JSArray choices=call.getArray("choices");
+   if(choices!=null && session!=null){
+    for(int i=0;i<Math.min(choices.length(),12);i++){final int index=i;Button button=new Button(getActivity());
+     button.setText(choices.optString(i));button.setEnabled(i!=call.getInt("selected",0));button.setOnClickListener(v->{switchTo=index;dismiss();});switches.addView(button);}
+   }else for(int i=0;i<urls.size();i++){final String url=urls.get(i);Button button=new Button(getActivity());button.setText(labels.get(i));button.setOnClickListener(v->{leaveFullscreen();player.stopLoading();player.loadUrl(url);title.setText(call.getString("title","MoroShow"));});switches.addView(button);}
    layout.addView(scroller);videoContainer=new FrameLayout(getActivity());videoContainer.addView(player,new FrameLayout.LayoutParams(-1,-1));layout.addView(videoContainer,new LinearLayout.LayoutParams(-1,0,1));dialog.setContentView(layout);dialog.setOnDismissListener(d->cleanUp());
    dialog.setOnKeyListener((d,key,event)->{if(key==KeyEvent.KEYCODE_BACK&&event.getAction()==KeyEvent.ACTION_UP){if(customView!=null)leaveFullscreen();else dismiss();return true;}return false;});
-   dialog.show();dialog.getWindow().setLayout(-1,-1);dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);player.loadUrl(urls.get(Math.max(0,Math.min(call.getInt("selected",0),urls.size()-1))));close.requestFocus();
+   dialog.show();dialog.getWindow().setLayout(-1,-1);dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);expectedPage=urls.get(Math.max(0,Math.min(call.getInt("selected",0),urls.size()-1)));player.loadUrl(expectedPage);clock.postDelayed(tick,3000);close.requestFocus();
   });
  }
  private void leaveFullscreen(){if(customView!=null){videoContainer.removeView(customView);customView=null;if(fullscreenCallback!=null)fullscreenCallback.onCustomViewHidden();fullscreenCallback=null;}}
  private void dismiss(){if(dialog!=null)dialog.dismiss();}
- private void cleanUp(){leaveFullscreen();if(player!=null){player.stopLoading();player.loadUrl("about:blank");videoContainer.removeView(player);player.destroy();player=null;}dialog=null;if(pending!=null){pending.resolve(new JSObject().put("closed",true));pending=null;}}
+ private void cleanUp(){clock.removeCallbacks(tick);session=null;leaveFullscreen();if(player!=null){player.stopLoading();player.loadUrl("about:blank");videoContainer.removeView(player);player.destroy();player=null;}dialog=null;if(pending!=null){JSObject result=new JSObject().put("closed",true);if(switchTo!=null)result.put("switchTo",switchTo);pending.resolve(result);pending=null;}}
  @PluginMethod public void close(PluginCall call){getActivity().runOnUiThread(()->{dismiss();call.resolve();});}
  @Override protected void handleOnPause(){if(player!=null)player.onPause();}
  @Override protected void handleOnResume(){if(player!=null)player.onResume();}
