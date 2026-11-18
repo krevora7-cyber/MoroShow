@@ -6,6 +6,8 @@ import {mediaLease,subtitleLease,registerDramaMedia} from './dramaPlayback';
 import type { Express, Request } from 'express';
 import type { CatalogItem } from '../types';
 import { db } from './db';
+import {nuvioVod} from './nuvioVod';
+import { addonVod, configuredVodAddon } from './stremioVod';
 import { directVodOptions, resolveDirectVod } from './directVod';
 export const EMBED_SERVERS = [
  {id:'vidstuck',name:'Vidstuck',origin:'https://vidstuck.cc',prefix:'/embed'},
@@ -14,6 +16,7 @@ export const EMBED_SERVERS = [
  {id:'cinezo',name:'Source 2',origin:'https://player.cinezo.live',prefix:'/embed'},
  {id:'vidsrc-mov',name:'Source 3',origin:'https://vidsrc.mov',prefix:'/embed'},
  {id:'vidlink',name:'Source 4',origin:'https://vidlink.pro',prefix:''},
+ {id:'vixsrc',name:'VixSrc',origin:'https://vixsrc.to',prefix:''},
  {id:'vidsrc-sh',name:'Source 5',origin:'https://vidsrc.sh',prefix:'/embed'},
 ] as const;
 export function embedUrl(server:string,type:string,id:number,season?:number,episode?:number){
@@ -116,7 +119,7 @@ export function registerWebSources(app:Express){
  if(String(req.body.contentId).startsWith('drama:')){if(p.isKid)throw new Error('No verified Kids rating');const id=String(req.body.contentId),identity=parseDramaIdentity(id),d=await dramaDetails(identity.seriesId);const ep=d.episodes.find(e=>e.id===id);if(!ep)throw new Error('Select an available episode');const prepared=await prepareShort(id,req.socket.localPort!);if(!prepared)throw Error('Episode preparation unavailable');const {source,local}=prepared;let lease=prepared.lease;const compatible=req.body.compatibility===true||prepared.compatible;if(compatible)lease=compatibilityLease(local);return res.json({success:true,token:randomUUID(),streamUrl:lease,streamType:compatible?'hls':source.streamType,subtitles:source.subtitles.map(sub=>({...sub,url:subtitleLease(sub.url)})),variantId:'shorts',variants:[{id:'shorts',label:'Shorts'}],content:ep});}
  const directOptions = req.body.directVod === true ? directVodOptions() : [];
  const provider = directOptions.find(source => source.id === variantId);
- const embedOptions = EMBED_SERVERS.filter(source => ['vidstuck','videasy','vidlink','cinesrc'].includes(source.id));
+ const embedOptions = EMBED_SERVERS.filter(source => ['vidstuck','videasy','vidlink','vixsrc','cinesrc'].includes(source.id));
  const embed = embedOptions.some(source => source.id === variantId);
  if (!provider && !embed) throw new Error('Unknown player source');
  const id = webId(req.body.contentId), d = await allowed(id,p.isKid);
@@ -141,6 +144,18 @@ export function registerWebSources(app:Express){
    return res.set('Cache-Control','no-store').json({
      success:true, token:randomUUID(), ...stream, variantId, variants, content,
    });
+ }
+ if (req.body.directVod === true) {
+   const stream = await nuvioVod(variantId,id);
+   if (stream) return res.set('Cache-Control','no-store').json({success:true,token:randomUUID(),...stream,variantId,variants,content});
+ }
+ const manifest = req.body.directVod === true && configuredVodAddon(variantId);
+ if (manifest) {
+   try {
+     const imdb = d.imdb_id || (await tmdb(`${id.type}/${id.id}/external_ids`)).imdb_id;
+     const stream = await addonVod(manifest, imdb, id.season, id.episode);
+     if (stream) return res.set('Cache-Control','no-store').json({success:true,token:randomUUID(),...stream,variantId,variants,content});
+   } catch { /* Keep the source's embedded player available when the addon cannot serve this title. */ }
  }
  const url = embedUrl(variantId,id.type,id.id,id.season,id.episode);
  res.json({success:true,token:'',streamUrl:'',streamType:'hls',embedUrl:url,variantId,variants,content});
