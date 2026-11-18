@@ -25,6 +25,7 @@ export interface Profile {
 }
 
 export interface WatchHistoryItem {
+  variantId?: string;
   contentId: string;
   name: string;
   streamUrl: string;
